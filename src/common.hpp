@@ -33,43 +33,11 @@ std::unique_ptr<T[], DeleteAligned<T>> allocate_aligned(int alignment,
     return std::unique_ptr<T[], DeleteAligned<T>>{raw};
 }
 
-// For MrManager
-typedef std::map<std::string, std::pair<size_t, size_t>>    buffer_info_t;
-typedef std::unique_ptr<uint8_t[], DeleteAligned<uint8_t>>  buffer_t;
-typedef std::vector<std::unique_ptr<uint8_t[], DeleteAligned<uint8_t>>> \
-                                                            buffer_list_t;
-
-typedef std::map<std::string, size_t>                       pd_info_t;
-typedef std::vector<del_unique_ptr<struct ibv_pd>>          pd_list_t;
-
-// Byte
-[[maybe_unused]] static constexpr size_t operator"" _B(unsigned long long x) {
-return x;
-}
-
-// KibiByte
-[[maybe_unused]] static constexpr size_t operator"" _KiB(long double x) {
-return std::llround(x * 1024);
-}
-
-[[maybe_unused]] static constexpr size_t operator"" _KiB(unsigned long long x) {
-return x * 1024;
-}
-
-// MebiByte
-[[maybe_unused]] static constexpr size_t operator"" _MiB(long double x) {
-return std::llround(x * 1024 * 1024);
-}
-
-[[maybe_unused]] static constexpr size_t operator"" _MiB(unsigned long long x) {
-return x * 1024 * 1024;
-}
-
-// GibiByte
-[[maybe_unused]] static constexpr size_t operator"" _GiB(long double x) {
-return std::llround(x * 1024 * 1024 * 1024);
-}
-
-[[maybe_unused]] static constexpr size_t operator"" _GiB(unsigned long long x) {
-return x * 1024 * 1024 * 1024;
-}
+// namespace hartebeest {
+//     enum {
+//         LOCAL_READ = 0,
+//         LOCAL_WRITE = IBV_ACCESS_LOCAL_WRITE,
+//         REMOTE_READ = IBV_ACCESS_REMOTE_READ,
+//         REMOTE_WRITE = IBV_ACCESS_REMOTE_WRITE
+//     };
+// }

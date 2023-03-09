@@ -73,11 +73,11 @@ namespace hartebeest {
                 (ibv_query_device(context, &device_attr) != 0) ? 0 : 1;
         }
 
-        struct ibv_context*             getContext() const { return context; }
-        struct ibv_device_attr const &  getDeviceAttributes() const { return device_attr; }
+        struct ibv_context* getContext() const { return context; }
+        struct ibv_device_attr const & getDeviceAttributes() const { return device_attr; }
 
-        uint8_t                         getPortId() const { return port_id; }
-        uint16_t                        getPortLid() const {return port_lid; }
+        uint8_t getPortId() const { return port_id; }
+        uint16_t getPortLid() const {return port_lid; }
 
         void setPortId(uint8_t arg_port_id) { port_id = arg_port_id; }
         void setPortLid(uint16_t arg_port_lid) { port_lid = arg_port_lid; }

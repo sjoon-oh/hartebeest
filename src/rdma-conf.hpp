@@ -9,6 +9,7 @@
  */
 
 #include <map>
+// #include <utility>
 
 #include "device.hpp"
 #include "mem-region.hpp"
@@ -34,7 +35,7 @@ namespace hartebeest {
      * 
      * A program may have multiple IBV-resources, 
      *  such as many Queue Pairs, Protection Domains, and much more.
-     *  Single RdmaWalkieTalike instance handles all of them in one instance, thus
+     *  Single RdmaConfigurator instance handles all of them in one instance, thus
      *  this is not designed to have many RdmaConfigurator objects in a program. 
      * 
      * Please refer to README.md for more information.
@@ -46,12 +47,24 @@ namespace hartebeest {
         bool                            dev_init;
         // It is reasonable to have a single device manager.
 
+        //
+        // Creation/Deletion/Linker
         std::unique_ptr<DeviceManager>  dev_manager;    // Device Management
         std::unique_ptr<MrManager>      mr_manager;     // Memory Management
         std::unique_ptr<QueueManager>   qs_manager;     // Queue Management
         std::unique_ptr<PdManager>      pd_manager;     // Protection Domain Management
 
-        
+        //
+        // Metadata Management.
+        // Records what resource(key) is associated to which Protection Domain.
+        // <K, V> = <mr_name, pd_name>
+        // <K, V> = <qp_name, pd_name>
+        // <K, V> = <cq_name, hca_idx>
+        std::map<std::string, std::string>  mr_pd_regbook; 
+        std::map<std::string, std::string>  qp_pd_regbook;
+        std::map<std::string, int>          cq_ctx_regbook;
+
+
 
     public:
         RdmaConfigurator() : dev_init(false) {
@@ -89,6 +102,43 @@ namespace hartebeest {
         
         inline bool isMrRegistered(std::string arg_mr_name) {
             return mr_manager->isMrRegistered(arg_mr_name);
+        }
+
+        inline bool isMrAssociated(std::string arg_mr_name) {
+            if (mr_pd_regbook.find(arg_mr_name) != mr_pd_regbook.end())
+                return true;
+            return false;
+        }
+
+        inline bool isQpAssociated(std::string arg_qp_name) {
+            if (qp_pd_regbook.find(arg_qp_name) != qp_pd_regbook.end())
+                return true;
+            return false;
+        }
+
+        inline bool isCqAssociated(std::string arg_cq_name) {
+            if (cq_ctx_regbook.find(arg_cq_name) != cq_ctx_regbook.end())
+                return true;
+            return false;
+        }
+
+        inline std::string getAssociatedPdFromMr(std::string arg_mr_name) {
+            if (isMrAssociated(arg_mr_name))
+                return mr_pd_regbook.find(arg_mr_name)->second;
+            else return std::string("");
+        }
+
+        inline std::string getAssociatedPdFromQp(std::string arg_qp_name) {
+            if (isQpAssociated(arg_qp_name))
+                return qp_pd_regbook.find(arg_qp_name)->second;
+            else return std::string("");
+        }
+
+
+        inline int getAssociatedHcaIdxFromCq(std::string arg_cq_name) {
+            if (isCqAssociated(arg_cq_name))
+                return cq_ctx_regbook.find(arg_cq_name)->second;
+            else return int{-1};
         }
 
         //
@@ -129,19 +179,23 @@ namespace hartebeest {
         // Call Sequence 3.
         bool doRegisterMr(std::string arg_pd_name, 
             std::string arg_buf_name, std::string arg_mr_name) {
+
+            if (isMrAssociated(arg_mr_name)) return false;
             
-            void* addr = mr_manager->getAddress(arg_buf_name);
-            size_t len = mr_manager->getLen(arg_buf_name);
+            void* addr = mr_manager->getBufferAddress(arg_buf_name);
+            size_t len = mr_manager->getBufferLen(arg_buf_name);
 
             struct ibv_mr* mr;
             mr = pd_manager->doCreateMr(
                 arg_pd_name, 
                 addr, 
                 len, 
-                LOCAL_READ | LOCAL_WRITE | REMOTE_READ | REMOTE_WRITE
+                0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
             );
 
             if (mr == nullptr) return false;
+            
+            mr_pd_regbook.insert(std::pair<std::string, std::string>(arg_mr_name, arg_pd_name));
 
             return mr_manager->doRegisterMr2(arg_mr_name, mr);
         }
@@ -150,6 +204,9 @@ namespace hartebeest {
         // Call Sequence 4.
         bool doRegisterCq(std::string arg_cq_name) {
             
+            if (isCqAssociated(arg_cq_name)) false;
+            cq_ctx_regbook.insert(std::pair<std::string, int>(arg_cq_name, 0));
+
             return
                 qs_manager->doRegisterCq(
                     arg_cq_name, 
@@ -164,6 +221,10 @@ namespace hartebeest {
             std::string arg_send_cq_name,
             std::string arg_recv_cq_name
         ) {
+
+            if (isQpAssociated(arg_qp_name)) false;
+            qp_pd_regbook.insert(std::pair<std::string, std::string>(arg_qp_name, arg_pd_name));
+
             return
                 qs_manager->doCreateAndRegisterQp(
                     arg_qp_name,
@@ -173,8 +234,28 @@ namespace hartebeest {
                 );
         }
 
+        bool doInitQp(std::string arg_qp_name, int arg_dev_idx = 0) {
+            
+            return
+                qs_manager->doInitQp(
+                    arg_qp_name, 
+                    dev_manager->getHcaDevice().getPortId()
+                    );
+        }
 
-
+        bool doConnectRcQp(
+            std::string arg_qp_name,
+            int arg_remote_port_id,
+            uint32_t arg_remote_qpn,
+            uint16_t arg_remote_lid
+        ) {
+            return 
+                qs_manager->doConnectRemoteRcQp(
+                    arg_qp_name, arg_remote_port_id, arg_remote_qpn, arg_remote_lid
+                );
+        }
     };
+
+    
 
 }

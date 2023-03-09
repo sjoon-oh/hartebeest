@@ -22,24 +22,17 @@
 
 namespace hartebeest {
 
-    enum MemoryRights {
-        LOCAL_READ = 0,
-        LOCAL_WRITE = IBV_ACCESS_LOCAL_WRITE,
-        REMOTE_READ = IBV_ACCESS_REMOTE_READ,
-        REMOTE_WRITE = IBV_ACCESS_REMOTE_WRITE
-    };
-
-    struct MemoryRegion {
-        uintptr_t addr;
-        uint64_t size;
-        uint32_t lkey;
-        uint32_t rkey;
+    struct Mr {
+        uintptr_t   addr;
+        uint64_t    size;
+        uint32_t    lkey;
+        uint32_t    rkey;
     };
 
     class MrManager {
     private:
-        buffer_info_t bufinfo_map; // <index, length>
-        buffer_list_t buf_list;
+        std::map<std::string, std::pair<size_t, size_t>> bufinfo_map; // <index, length>
+        std::vector<std::unique_ptr<uint8_t[], DeleteAligned<uint8_t>>> buf_list;
 
         std::map<std::string, size_t> mrinfo_map;
         std::vector<del_unique_ptr<struct ibv_mr>> mr_list{};
@@ -66,6 +59,41 @@ namespace hartebeest {
             return buf_list.size() == mr_list.size();
         }
 
+        size_t getBufferIdx(std::string arg_mr_name) {
+            return bufinfo_map.find(arg_mr_name)->second.first;
+        }
+
+        size_t getBufferLen(std::string arg_mr_name) {
+            return bufinfo_map.find(arg_mr_name)->second.second;
+        }
+
+        void* getBufferAddress(std::string arg_buf_name) {
+            uint8_t* addr = buf_list.at(getBufferIdx(arg_buf_name)).get();
+            return addr;
+        }
+
+        size_t getMrIdx(std::string arg_mr_name) {
+            return mrinfo_map.find(arg_mr_name)->second;
+        }
+
+        struct ibv_mr* getMr(std::string arg_mr_name) {
+            if (!isMrRegistered(arg_mr_name)) {
+                return nullptr;
+            }
+
+            return mr_list.at(getMrIdx(arg_mr_name)).get();            
+        }
+
+        uint32_t getMrLocalKey(std::string arg_mr_name) {
+            struct ibv_mr* mr = getMr(arg_mr_name);
+            return mr == nullptr ? 0 : mr->lkey;
+        }
+
+        uint32_t getMrRemoteKey(std::string arg_mr_name) {
+            struct ibv_mr* mr = getMr(arg_mr_name);
+            return mr == nullptr ? 0 : mr->rkey;
+        }
+
         bool doAllocateBuffer(std::string arg_buf_name, size_t arg_len, int arg_align) {
             if (isBufferAllocated(arg_buf_name))
                 return false;
@@ -83,14 +111,6 @@ namespace hartebeest {
                 std::pair<std::string, std::pair<size_t, size_t>>(arg_buf_name, index_length));
 
             return true;
-        }
-
-        size_t getIdx(std::string arg_mr_name) {
-            return bufinfo_map.find(arg_mr_name)->second.first;
-        }
-
-        size_t getLen(std::string arg_mr_name) {
-            return bufinfo_map.find(arg_mr_name)->second.second;
         }
 
         bool doRegisterMr2(std::string arg_mr_name, struct ibv_mr* arg_mr) {
@@ -113,9 +133,8 @@ namespace hartebeest {
             return true;
         }
 
-        void* getAddress(std::string arg_buf_name) {
-            uint8_t* addr = buf_list.at(getIdx(arg_buf_name)).get();
-            return addr;
-        }
+
+
+
     };
 }

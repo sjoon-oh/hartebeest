@@ -12,7 +12,7 @@ include_directories(${CMAKE_SOURCE_DIR}/extern)
 # Test Target
 set(DM_TEST_TARGET hartebeest-dm-test.run)
 set(PM_TEST_TARGET hartebeest-pm-test.run)
-set(WT_TEST_TARGET hartebeest-wt-test.run)
+set(RC_TEST_TARGET hartebeest-rc-test.run)
 
 # Device Manager Test
 add_executable(
@@ -34,13 +34,13 @@ set_target_properties(
 
 # Walkie Talkie Test
 add_executable(
-    ${WT_TEST_TARGET}
-    ${CMAKE_SOURCE_DIR}/test/wt-test.cpp 
+    ${RC_TEST_TARGET}
+    ${CMAKE_SOURCE_DIR}/test/rc-test.cpp 
 )
 set_target_properties(
-    ${WT_TEST_TARGET} 
+    ${RC_TEST_TARGET} 
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
 target_link_libraries(${DM_TEST_TARGET} PUBLIC ibverbs)
 target_link_libraries(${PM_TEST_TARGET} PUBLIC ibverbs)
-target_link_libraries(${WT_TEST_TARGET} PUBLIC ibverbs)
+target_link_libraries(${RC_TEST_TARGET} PUBLIC ibverbs)

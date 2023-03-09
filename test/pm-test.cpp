@@ -3,6 +3,8 @@
  * pm_test.cpp
  */
 
+#include <cstdlib>
+
 #include "spdlog/spdlog.h"
 // https://github.com/gabime/spdlog
 // CentOS: sudo yum -y install spdlog-dev
@@ -59,13 +61,13 @@ int main() {
         }
 
         hartebeest::MrManager mr_man;
-        const size_t allocated_size = 1_GiB;
+        const size_t allocated_size = 1024 * 1024;
         const int alignment = 64;
 
         if (mr_man.doAllocateBuffer("first-mr", 1024, alignment)) {
             spdlog::info("Memory allocation success: first-mr");
-            spdlog::info("first-mr index: {}", mr_man.getIdx("first-mr"));
-            spdlog::info("first-mr len: {}", mr_man.getLen("first-mr"));
+            spdlog::info("first-mr index: {}", mr_man.getBufferIdx("first-mr"));
+            spdlog::info("first-mr len: {}", mr_man.getBufferLen("first-mr"));
         }
         else {
             spdlog::error("Allocation of buffer failed");
@@ -75,8 +77,8 @@ int main() {
         // Multiple Allocation
         if (mr_man.doAllocateBuffer("second-mr", 1024, alignment)) {
             spdlog::info("Memory allocation success: second-mr");
-            spdlog::info("second-mr index: {}", mr_man.getIdx("second-mr"));
-            spdlog::info("second-mr len: {}", mr_man.getLen("second-mr"));
+            spdlog::info("second-mr index: {}", mr_man.getBufferIdx("second-mr"));
+            spdlog::info("second-mr len: {}", mr_man.getBufferLen("second-mr"));
         }
         else {
             spdlog::error("Allocation of buffer failed");
@@ -85,9 +87,9 @@ int main() {
 
         auto mr = pd_man.doCreateMr(
             "first-pd",
-            mr_man.getAddress("first-mr"), 
-            mr_man.getLen("first-mr"), 
-            hartebeest::LOCAL_READ
+            mr_man.getBufferAddress("first-mr"), 
+            mr_man.getBufferLen("first-mr"), 
+            0 // Local Read
         );
         
         if (mr == nullptr) {

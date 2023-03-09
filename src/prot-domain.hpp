@@ -22,8 +22,6 @@
 #include "device.hpp"
 #include "mem-region.hpp"
 
-
-
 // #include <iostream>
 
 // Note: PdManager must interact with single DeviceManager instance (context).
@@ -32,8 +30,8 @@ namespace hartebeest {
 
     class PdManager {
     private:
-        pd_info_t       pdinfo_map; // <index>
-        pd_list_t       pd_list{};
+        std::map<std::string, size_t>       pdinfo_map; // <index>
+        std::vector<del_unique_ptr<struct ibv_pd>>       pd_list{};
 
     public:
         PdManager() {}
@@ -46,6 +44,15 @@ namespace hartebeest {
                 return true;
             return false;
         }
+
+        size_t getIdx(std::string arg_pd_name) {
+            return pdinfo_map.find(arg_pd_name)->second;
+        }
+
+        struct ibv_pd* getPd(std::string arg_pd_name) {
+            int idx = getIdx(arg_pd_name);
+            return pd_list.at(idx).get();
+        }      
 
         bool doRegisterPd(std::string arg_pd_name, HcaDevice& arg_opened_dev) {
             if (isPdRegistered(arg_pd_name))
@@ -74,15 +81,6 @@ namespace hartebeest {
             // Map: <K, V> = <"Name", index_val>
 
             return true;
-        }
-
-        size_t getIdx(std::string arg_pd_name) {
-            return pdinfo_map.find(arg_pd_name)->second;
-        }
-
-        struct ibv_pd* getPd(std::string arg_pd_name) {
-            int idx = getIdx(arg_pd_name);
-            return pd_list.at(idx).get();
         }
 
         struct ibv_mr* doCreateMr(std::string arg_pd_name, void* arg_addr, size_t arg_len, int arg_rights) {
