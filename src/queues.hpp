@@ -2,7 +2,7 @@
 
 /* github.com/sjoon-oh/hartebeest
  * Author: Sukjoon Oh, sjoon@kaist.ac.kr
- * connection.cpp
+ * queues.hpp
  * 
  * Project hartebeest is a RDMA(IB) connector,
  *  a refactored version from Mu.
@@ -42,11 +42,24 @@ namespace hartebeest {
 
     };
 
-    
+    //
+    // Class QueueManager
     class QueueManager {
     private:
 
-        // Completion Queue Management
+        //
+        // Management containers:
+        //
+        // cqinfo_map inserts <K, V>. The key is a string (Completion Queue Name), and the
+        //  value is an index value of cq_list.
+        // cq_list holds unique_ptr type (with a deleter). 
+        //
+        // qpinfo_map inserts <K, V>. The key is a string (Queue Pair Name), and the
+        //  value is an index value of qp_list.
+        // qp_list holds unique_ptr type (with a deleter).
+        //
+        // A user can distinguish multiple CQs and QPs with their name.
+
         std::map<std::string, size_t>               cqinfo_map;
         std::vector<del_unique_ptr<struct ibv_cq>>  cq_list{};
 
@@ -63,6 +76,7 @@ namespace hartebeest {
 
     public:
         QueueManager() {
+
             // The intiial attribute of a queue pair is predefined here,
             //  but may be updated in a program execution. 
             //  Never trust these values.
@@ -76,9 +90,17 @@ namespace hartebeest {
         }
 
         ~QueueManager() {
-            std::cout << "~QueueManager\n";
+            // std::cout << "~QueueManager\n";
         }
 
+        //
+        // The inteface naming convention is designed to have:
+        //  - do** : These are management functions. 
+        //      Does something important. Directly updates its member. 
+        //  - is** : Check status.
+        //  - get** : Returns reference/value of a member. 
+        //
+        //  Members follow the underscore, methods follow the CamelCase naming convention.
         bool isCqRegistered(std::string arg_cq_name) {
             if (cqinfo_map.find(arg_cq_name) != cqinfo_map.end())
                 return true;
@@ -113,11 +135,20 @@ namespace hartebeest {
             return qp_list.at(getQpIdx(arg_qp_name)).get();
         }
 
+        //
+        // All of the core interface starts with prefix 'do'.
+        // doRegisterCq does the following:
+        //  - Creates CQ with name arg_cq_name.
+        //  - Associates with IB context arg_ctx.
+        //  - Registers to management container, cq_list and cqinfo_map.
+        //
         bool doRegisterCq(std::string arg_cq_name, struct ibv_context* arg_ctx) {
 
+            // Simple verification. It should not have the same key.
             if (isCqRegistered(arg_cq_name)) 
                 return false;
-
+            
+            // Creates CQ.
             auto cq = ibv_create_cq(
                 arg_ctx, 
                 cq_depth, 
@@ -152,21 +183,20 @@ namespace hartebeest {
                 std::string arg_send_cq_name,
                 std::string arg_recv_cq_name
             ) {
-        
+            
+            // Verifications.
+            //  Should not be already registered.
             if (isQpRegistered(arg_qp_name)) return false;
             
+            // Should have been registered.
             if (!isCqRegistered(arg_send_cq_name)) return false;
             if (!isCqRegistered(arg_recv_cq_name)) return false;
-
-            
 
             qp_init_attr.send_cq = getCq(arg_send_cq_name);
             qp_init_attr.recv_cq = getCq(arg_recv_cq_name);
 
-
-            // std::cout << "-- 3 Send CQ: " << qp_init_attr.send_cq << " \n";
-            // std::cout << "-- 3 Send CQ: " << qp_init_attr.recv_cq << " \n";
-
+            //
+            // Creates Queue Pair.
             auto qp = ibv_create_qp(arg_pd, &qp_init_attr);
             if (qp == nullptr) return false;
 
@@ -186,14 +216,19 @@ namespace hartebeest {
 
             return true;
         }
-
+    
+        // 
+        // Does QP transitions to RESET state.
         bool doQpReset(std::string arg_qp_name) {
             if (!isQpRegistered(arg_qp_name)) return false;
 
             struct ibv_qp_attr attr;
             memset(&attr, 0, sizeof(attr));
 
+            // Sets attribute qp_state to RESET.
             attr.qp_state = IBV_QPS_RESET;
+
+            // Turn!
             auto ret = ibv_modify_qp(
                 qp_list.at(getQpIdx(arg_qp_name)).get(), 
                 &attr, 
@@ -206,6 +241,10 @@ namespace hartebeest {
             return true;
         }
 
+        //
+        // Initializes QP. 
+        // Note that right after the creation of a QP, it stays at RESET state.
+        // doInitQp makes the transition to INIT state.
         bool doInitQp(std::string arg_qp_name, int arg_port_id) {
 
             struct ibv_qp_attr init_attr;

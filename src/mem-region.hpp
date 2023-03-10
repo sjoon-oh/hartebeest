@@ -29,8 +29,29 @@ namespace hartebeest {
         uint32_t    rkey;
     };
 
+
+    //
+    // class MrManager does the following:
+    //  - Manages memory region of a program uses. All MRs are handled by the manager.
+    //  - Supports memory allocation. If a user want to manage Mr with the manager,
+    //      call doBufferAllocate.
     class MrManager {
     private:
+
+        //
+        // Management containers:
+        //
+        // bufinfo_map inserts <K, V>. The key is a string (Buffer Name), and the
+        //  value is an index value of buf_list.
+        // buf_list holds unique_ptr type (with a deleter). 
+        //
+        // mrinfo_map inserts <K, V>. The key is a string (MR Name), and the
+        //  value is an index value of mr_list.
+        // mr_list holds unique_ptr type (with a deleter).
+        //  ibv_mr can be referenced using mr_list.
+        //
+        // A user can distinguish multiple buffers and memory regions with their name.
+
         std::map<std::string, std::pair<size_t, size_t>> bufinfo_map; // <index, length>
         std::vector<std::unique_ptr<uint8_t[], DeleteAligned<uint8_t>>> buf_list;
 
@@ -40,8 +61,17 @@ namespace hartebeest {
     public:
         MrManager() {};
         ~MrManager() {
-            std::cout << "~MrManager()\n";
+            // std::cout << "~MrManager()\n";
         };
+
+        //
+        // The inteface naming convention is designed to have:
+        //  - do** : These are management functions. 
+        //      Does something important. Directly updates its member. 
+        //  - is** : Check status.
+        //  - get** : Returns reference/value of a member. 
+        //
+        //  Members follow the underscore, methods follow the CamelCase naming convention.
 
         bool isBufferAllocated(std::string arg_buf_name) {
             if (bufinfo_map.find(arg_buf_name) != bufinfo_map.end())
@@ -94,6 +124,12 @@ namespace hartebeest {
             return mr == nullptr ? 0 : mr->rkey;
         }
 
+        //
+        // All of the core interface starts with prefix 'do'.
+        // doAllocateBuffer does the following:
+        //  - Creates unique_ptr with a deleter that allocates memory (aligned).
+        //  - Registers to management container, buf_list and bufinfo_map.
+        //
         bool doAllocateBuffer(std::string arg_buf_name, size_t arg_len, int arg_align) {
             if (isBufferAllocated(arg_buf_name))
                 return false;
@@ -113,6 +149,12 @@ namespace hartebeest {
             return true;
         }
 
+        //
+        // doRegisterMr2 does the following:
+        //  - Creates unique_ptr with a deleter that allocates ibv_mr (aligned).
+        //      The resource is automatically freed when the manager instance is destroyed.
+        //  - Registers memory region to the management container. 
+        //
         bool doRegisterMr2(std::string arg_mr_name, struct ibv_mr* arg_mr) {
 
             if (isMrRegistered(arg_mr_name)) {
@@ -132,9 +174,5 @@ namespace hartebeest {
 
             return true;
         }
-
-
-
-
     };
 }

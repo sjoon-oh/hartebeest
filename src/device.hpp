@@ -5,11 +5,6 @@
  * device.hpp
  */
 
-// #include <atomic>
-
-// #include <thread>
-// #include <vector>
-
 #include <cstdint>
 #include <vector>
 
@@ -39,6 +34,15 @@ namespace hartebeest {
         const int32_t   getId() const { return id; };
     };
 
+    //
+    // The inteface naming convention is designed to have:
+    //  - do** : These are management functions. 
+    //      Does something important. Directly updates its member. 
+    //  - is** : Check status.
+    //  - get** : Returns reference/value of a member. 
+    //
+    //  Members follow the underscore, methods follow the CamelCase naming convention.
+
     class HcaDevice final {
     private:
         struct ibv_device*      device = nullptr;
@@ -49,6 +53,7 @@ namespace hartebeest {
         uint16_t                port_lid = 0;
 
     public:
+        
         // Birth
         HcaDevice() {
             memset(&device_attr, 0, sizeof(device_attr));
@@ -58,7 +63,7 @@ namespace hartebeest {
             memset(&device_attr, 0, sizeof(device_attr));
         }
 
-        // Interface
+        // Resets devices.
         bool doReset() {
             if (context != nullptr)
                 ibv_close_device(context);
@@ -66,7 +71,8 @@ namespace hartebeest {
             memset(&device_attr, 0, sizeof(device_attr));
         }
 
-        // 
+        // The HcaDevice instance does not initializes itself.
+        // Make sure to call doOpen before use.
         bool doOpen() {
             context = ibv_open_device(device);
             return 
@@ -90,7 +96,10 @@ namespace hartebeest {
     };
 
     //
-    // Class Connection
+    // Class DeviceManager uses HcaDevice to handle device.
+    // Generate DeviceManager instance, and use its interface to access to a device.
+    // DeviceManager handles multiple devices.
+    //  * Current design assumes single device environment. (Only index 0 usable)
     class DeviceManager final {
     private:
 
