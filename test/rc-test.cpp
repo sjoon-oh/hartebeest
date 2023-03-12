@@ -129,7 +129,7 @@ int main() {
 
     spdlog::info("RdmaConfigurator MR registration test.");
 
-    ret = configurator.doRegisterMr(
+    ret = configurator.doCreateAndRegisterMr(
         "some-pd-1",
         "some-buffer",
         "some-mr-1"
@@ -141,7 +141,7 @@ int main() {
         return 0;
     }
 
-    ret = configurator.doRegisterMr(
+    ret = configurator.doCreateAndRegisterMr(
         "some-pd-2",
         "some-buffer-2",
         "some-mr-2"
@@ -153,7 +153,7 @@ int main() {
         return 0;
     }
 
-    ret = configurator.doRegisterMr(
+    ret = configurator.doCreateAndRegisterMr(
         "some-pd-3",
         "some-buffer-3",
         "some-mr-3"
@@ -166,14 +166,14 @@ int main() {
     }
 
     spdlog::info("Completion Queue registration test.");
-    ret = configurator.doRegisterCq("some-send-cq");
+    ret = configurator.doCreateAndRegisterCq("some-send-cq");
     if (ret) spdlog::info("some-send-cq OK");
     else {
         spdlog::info("Failed.");
         return 0;
     }
 
-    ret = configurator.doRegisterCq("some-recv-cq");
+    ret = configurator.doCreateAndRegisterCq("some-recv-cq");
     if (ret) spdlog::info("some-recv-cq OK");
     else {
         spdlog::info("Failed.");
@@ -184,6 +184,13 @@ int main() {
     ret = configurator.doCreateAndRegisterQp(
         "some-pd-1",
         "some-qp-1",
+        "some-send-cq",
+        "some-recv-cq"
+    );
+
+    ret = configurator.doCreateAndRegisterQp(
+        "some-pd-1",
+        "some-qp-2",
         "some-send-cq",
         "some-recv-cq"
     );
@@ -256,7 +263,7 @@ int main() {
         return 0;
     }
 
-
+    configurator.doExportAll("config.json");
 
     getchar();
 

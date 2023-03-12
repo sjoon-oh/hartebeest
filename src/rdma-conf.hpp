@@ -9,12 +9,21 @@
  */
 
 #include <map>
-// #include <utility>
+#include <string>
+
+// Config File Export/Importer
+#include <fstream>
+#include <ostream>
+
+#include "nlohmann/json.hpp"
 
 #include "device.hpp"
 #include "mem-region.hpp"
 #include "queues.hpp"
 #include "prot-domain.hpp"
+
+#include "file-conf.hpp"
+
 
 namespace hartebeest {
     
@@ -54,6 +63,8 @@ namespace hartebeest {
         std::unique_ptr<QueueManager>   qs_manager;     // Queue Management
         std::unique_ptr<PdManager>      pd_manager;     // Protection Domain Management
 
+        // All IB resources are associated to the RDMA context the dev_manager handles.
+
         //
         // Metadata Management.
         // Records what resource(key) is associated to which Protection Domain.
@@ -63,8 +74,6 @@ namespace hartebeest {
         std::map<std::string, std::string>  mr_pd_regbook; 
         std::map<std::string, std::string>  qp_pd_regbook;
         std::map<std::string, int>          cq_ctx_regbook;
-
-
 
     public:
         RdmaConfigurator() : dev_init(false) {
@@ -91,7 +100,14 @@ namespace hartebeest {
         QueueManager&   getQManager() { return *qs_manager.get(); }
         PdManager&      getPdManager() { return *pd_manager.get(); }
         
-        // Queries
+        //
+        // The inteface naming convention is designed to have:
+        //  - do** : These are management functions. 
+        //      Does something important. Directly updates its member. 
+        //  - is** : Check status.
+        //  - get** : Returns reference/value of a member. 
+        //
+        //  Members follow the underscore, methods follow the CamelCase naming convention.
         inline bool isPdRegistered(std::string arg_pd_name) {
             return pd_manager->isPdRegistered(arg_pd_name);
         }
@@ -142,12 +158,19 @@ namespace hartebeest {
         }
 
         //
+        // Here I provide call interface sequence. 
+        //  This RdmaConfig instance do not block multiple calls, 
+        //  since there may be several CQs, PDs and MRs to create/register.
+        //  Howver, ignoring orders between interfaces may cause unexpected behavior,
+        //  thus read the document before using them. 
+        //
         // This is temporary, set device/port 0 as default.
-        // Call Sequence 0.
+        // <Call Sequence 0>
+        //  Initializes HCA device, using its device manager (dev_mmanager).
+        //  Do not call multiple times.
         bool doInitDevice() {
             
             bool ret = true;
-            // auto dev_manager = getDeviceManager();
 
             const int dev_id = 0;
             const int dev_idx = 0;
@@ -164,27 +187,33 @@ namespace hartebeest {
         }
         
         //
-        // Call Sequence 1.
+        // <Call Sequence 1>
+        //  Device initialization must be done beforehand. 
+        //  Creates a protection domain. 
         bool doRegisterPd(std::string arg_pd_name) {
             return pd_manager->doRegisterPd(arg_pd_name, dev_manager->getHcaDevice());
         }
         
         //
-        // Call Sequence 2.
+        // <Call Sequence 2>
+        //  Allocates a buffer. All buffers are managed by the MrManager instance.
         bool doAllocateBuffer(std::string arg_buf_name, size_t arg_len, int arg_align) {
             return mr_manager->doAllocateBuffer(arg_buf_name, arg_len, arg_align);
         }
 
         //
-        // Call Sequence 3.
-        bool doRegisterMr(std::string arg_pd_name, 
+        // <Call Sequence 3>
+        //  Creates MR with arg_mr_name using existing buffer.
+        bool doCreateAndRegisterMr(std::string arg_pd_name, 
             std::string arg_buf_name, std::string arg_mr_name) {
-
+            
+            // If arg_mr_name is associated to some PD, it cannot be registered.
             if (isMrAssociated(arg_mr_name)) return false;
             
             void* addr = mr_manager->getBufferAddress(arg_buf_name);
             size_t len = mr_manager->getBufferLen(arg_buf_name);
 
+            // Creates an MR.
             struct ibv_mr* mr;
             mr = pd_manager->doCreateMr(
                 arg_pd_name, 
@@ -201,9 +230,11 @@ namespace hartebeest {
         }
 
         //
-        // Call Sequence 4.
-        bool doRegisterCq(std::string arg_cq_name) {
+        // <Call Sequence 4>
+        //  Creates CQ using arg_cq_name. The CQ registered to the RDMA context (HCA).
+        bool doCreateAndRegisterCq(std::string arg_cq_name) {
             
+            // If arg_mr_name is associated to some context, it cannot be registered.
             if (isCqAssociated(arg_cq_name)) false;
             cq_ctx_regbook.insert(std::pair<std::string, int>(arg_cq_name, 0));
 
@@ -214,7 +245,10 @@ namespace hartebeest {
         }
 
         //
-        // Call Sequence 5.
+        // <Call Sequence 5>
+        //  Creates Queue Pair with arg_qp_name and register to PD of arg_pd_name.
+        //  Send queue and receive queue (CQs) must be generated beforehand.
+        //  The CQs only in this RdmaConfigurator instance can be registered.
         bool doCreateAndRegisterQp(
             std::string arg_pd_name,
             std::string arg_qp_name,
@@ -234,6 +268,10 @@ namespace hartebeest {
                 );
         }
 
+        //
+        // <Call Sequence 6>
+        //  Queue pair stays in RESET state after the creation. 
+        //  This method simply makes transition to INIT state.
         bool doInitQp(std::string arg_qp_name, int arg_dev_idx = 0) {
             
             return
@@ -243,6 +281,9 @@ namespace hartebeest {
                     );
         }
 
+        //
+        // <Call Sequence 7>
+        //  
         bool doConnectRcQp(
             std::string arg_qp_name,
             int arg_remote_port_id,
@@ -254,8 +295,62 @@ namespace hartebeest {
                     arg_qp_name, arg_remote_port_id, arg_remote_qpn, arg_remote_lid
                 );
         }
+
+        //
+        // <Call Sequence 8>
+        // doExportAll exports all associated information needed for connection (of remotes) to 
+        //  JSON file. The header-only JSON parser library for C++ (https://github.com/nlohmann/json) 
+        //  is used in this function. 
+        //  Check the source in the "extern" directory.
+        bool doExportAll(std::string arg_export_path = "") {
+
+            nlohmann::json export_obj;
+            
+            export_obj["node_id"] = 0;
+            export_obj["qp_conn"] = nlohmann::json::array();
+
+            for (const auto& elem : qp_pd_regbook) {
+                
+                std::string qp_name{elem.first};
+                std::string pd_name{elem.second};
+
+                export_obj["qp_conn"].push_back(
+                    {
+                        {"qp_num", qs_manager->getQp(qp_name)->qp_num},
+                        {"port_id", dev_manager->getHcaDevice().getPortId()},
+                        {"port_lid", dev_manager->getHcaDevice().getPortLid()}
+                    }
+                );
+            }
+
+            if (arg_export_path == "")
+                arg_export_path = RDMA_CONF_DEFAULT_PATH;
+
+            std::ofstream export_out{arg_export_path};
+            export_out << std::setw(4) << export_obj << std::endl;
+
+            return true;
+        }
     };
 
-    
+    class ConfigFileExchanger {
+    private:
+        nlohmann::json config_obj;
+
+    public:
+        ConfigFileExchanger() {}
+        ~ConfigFileExchanger() {}
+
+        bool doReadConfigFile(std::string arg_conf_file_path = EXCH_CONF_DEFAULT_PATH) {
+            std::ifstream conf_input(arg_conf_file_path);
+
+            if (conf_input.fail()) 
+                return false;
+
+            conf_input >> config_obj;
+            return true;
+        }
+
+    };
 
 }

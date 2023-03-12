@@ -328,8 +328,6 @@ namespace hartebeest {
 
         bool doQpTransition() {
 
-            
-
             return true;
         }
 

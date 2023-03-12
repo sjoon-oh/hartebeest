@@ -32,12 +32,3 @@ std::unique_ptr<T[], DeleteAligned<T>> allocate_aligned(int alignment,
 
     return std::unique_ptr<T[], DeleteAligned<T>>{raw};
 }
-
-// namespace hartebeest {
-//     enum {
-//         LOCAL_READ = 0,
-//         LOCAL_WRITE = IBV_ACCESS_LOCAL_WRITE,
-//         REMOTE_READ = IBV_ACCESS_REMOTE_READ,
-//         REMOTE_WRITE = IBV_ACCESS_REMOTE_WRITE
-//     };
-// }

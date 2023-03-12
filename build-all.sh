@@ -4,6 +4,9 @@
 # Author: Sukjoon Oh, sjoon@kaist.ac.kr
 # build-all.cpp
 
+# rm ./*.json
+rm ./build/*.json
+
 # make clean
 # rm -rf build/*
 

@@ -13,6 +13,8 @@ include_directories(${CMAKE_SOURCE_DIR}/extern)
 set(DM_TEST_TARGET hartebeest-dm-test.run)
 set(PM_TEST_TARGET hartebeest-pm-test.run)
 set(RC_TEST_TARGET hartebeest-rc-test.run)
+set(JSON_TEST_TARGET hartebeest-json-test.run)
+set(FILE_TEST_TARGET hartebeest-file-test.run)
 
 # Device Manager Test
 add_executable(
@@ -41,6 +43,26 @@ set_target_properties(
     ${RC_TEST_TARGET} 
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
+# JSON Test
+add_executable(
+    ${JSON_TEST_TARGET}
+    ${CMAKE_SOURCE_DIR}/test/json-test.cpp 
+)
+set_target_properties(
+    ${JSON_TEST_TARGET} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
+
+# File Test
+add_executable(
+    ${FILE_TEST_TARGET}
+    ${CMAKE_SOURCE_DIR}/test/file-test.cpp 
+)
+set_target_properties(
+    ${FILE_TEST_TARGET} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
+
+
 target_link_libraries(${DM_TEST_TARGET} PUBLIC ibverbs)
 target_link_libraries(${PM_TEST_TARGET} PUBLIC ibverbs)
 target_link_libraries(${RC_TEST_TARGET} PUBLIC ibverbs)
+target_link_libraries(${FILE_TEST_TARGET} PUBLIC ibverbs)
