@@ -14,6 +14,12 @@
 // Config File Export/Importer
 #include <fstream>
 #include <ostream>
+#include <iostream>
+
+#include <arpa/inet.h>
+// #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
 
 #include "nlohmann/json.hpp"
 
@@ -156,6 +162,7 @@ namespace hartebeest {
                 return cq_ctx_regbook.find(arg_cq_name)->second;
             else return int{-1};
         }
+
 
         //
         // Here I provide call interface sequence. 
@@ -333,23 +340,290 @@ namespace hartebeest {
         }
     };
 
+    /* RDMA Queue Pairs requires the remotes' information to initiate communication. 
+     *  It is a user's responsibility to define how to exchange the metadata.
+     *
+     * There are two configuration files the RdmaConfigurator requries:
+     *  - Pre-Configuration File
+     *      This file, which is named "hb_rdma_pre_config.json" (default)
+     *      Ihe file should strictly follow the form of:
+     *      {
+     *          "port" :    <int>, 
+     *          "index" :   <int>,
+     *          "participants" : [
+     *              {
+     *                  "node_id" :     <int>,
+     *                  "ip" :          <string>,
+     *                  "alias" :       <string> [OPTIONAL]
+     *              }, \
+     *              { "node_id": <int>, "ip": <string>, "alias": <string> }, 
+     *              { "node_id": <int>, "ip": <string>, "alias": <string> }, 
+     *              ...
+     *          ]
+     *      }
+     * 
+     *      "port" name indicates the server port the ConfigFileExhanger instance will launch. 
+     *      "index" indicates the correspnding index of the "participant" list elements. 
+     *      Index starts from 0, and be sure to designate running machine's information.
+     *      "participants" lists holds all information of the players. The node information
+     *      of 'myself' should also be included.
+     * 
+     *  - Post-Configuration File
+     */
     class ConfigFileExchanger {
     private:
-        nlohmann::json config_obj;
+        nlohmann::json      pre_conf;
+        nlohmann::json      post_conf;
+
+        struct Node {
+            uint32_t            role;
+            int                 node_id;
+            std::string         addr;
+
+            int                 state;
+            int                 fd;
+        };
+
+        int                         this_node_idx;
+        std::vector<struct Node>    players;
+
+        //
+        // Epoll Related
+        bool            epoll_init_flag;
+        int             epoll_fd;
+
+        int             port;
+        int             sock_listen_fd;
+        int             sock_conn_fd;
+        
 
     public:
-        ConfigFileExchanger() {}
+        ConfigFileExchanger() : 
+            this_node_idx(-1),
+            epoll_init_flag(false) {
+                
+            }
         ~ConfigFileExchanger() {}
 
+        //
+        // Getters and Setters. Follows the same naming convention.
+        std::string getObjDump() {
+            return pre_conf.dump();  // set pretty off.
+        }
+
+        struct Node getPlayer(uint32_t arg_idx) {
+            return players.at(arg_idx);
+        }
+
+        int getNumOfPlayers() {
+            return players.size();
+        }
+
+        int getThisNodeIdx() { return this_node_idx; }
+        int getThisNodeRole() { return players.at(this_node_idx).role; }
+
+        void setPostConf(nlohmann::json arg_post_conf) {
+            post_conf = arg_post_conf;
+        }
+
+        //
+        // Make sure to call doReadConfigFile() first,
+        //  before doing anything else. 
         bool doReadConfigFile(std::string arg_conf_file_path = EXCH_CONF_DEFAULT_PATH) {
+            
+            bool ret = false;
             std::ifstream conf_input(arg_conf_file_path);
 
             if (conf_input.fail()) 
-                return false;
+                return ret;
 
-            conf_input >> config_obj;
+            conf_input >> pre_conf;
+
+            //
+            // Basic configuration starts from here.
+            // Initializes "this_node"
+            pre_conf.at(
+                __KEY(INDEX)
+                ).get_to(this_node_idx);
+
+            pre_conf.at(__KEY(PORT)).get_to(port);
+
+            for (auto& participant: pre_conf.at(__KEY(PARTICIPANTS))) {
+                
+                struct Node member;
+                // std::string ip;
+                // int         port;
+
+                member.node_id = participant.at(__KEY(NODE_ID));
+
+                if (member.node_id == 0)
+                    member.role = ROLE_SERVER;
+                
+                else member.role = ROLE_CLIENT;
+                
+                participant.at(__KEY(IP)).get_to(member.addr);
+                // pre_conf.at(__KEY(PORT)).get_to(port);
+
+                
+
+                // // Socket related
+                // memset(&member.sockaddr, 0, sizeof(struct sockaddr_in));
+
+                // member.sockaddr.sin_family = AF_INET;
+                // member.sockaddr.sin_port = htons(port);
+                // ret = inet_aton(ip.c_str(), &(member.sockaddr.sin_addr));   // Address Set
+
+                // Initial connection state
+                member.state = STATE_UNKNOWN;
+                member.fd = -1;
+
+                players.push_back(member);  // Register
+            }
+
             return true;
         }
+
+        // This is a blocking function.
+        bool doInitServer() {
+            
+            char buf[8192];
+
+            struct Node this_node = players.at(this_node_idx); // This throws!
+
+            if (this_node.role != ROLE_SERVER 
+                || epoll_init_flag == true)
+                return false;
+            
+            if (epoll_fd = epoll_create(512) > 0) 
+                epoll_init_flag = true;
+
+            return true;
+        }
+
+        bool doInitClient() {
+            return true;
+        }
+
+        //
+        // This is raw test code.
+        bool doTestServer() {
+            
+            int                 bsize = 1;
+            int                 sock_listen_fd = -1;
+
+            const int           buf_size = 8192;
+            char                buf[buf_size];
+
+            struct Node& this_node = players.at(this_node_idx); // This throws!
+
+            struct sockaddr_in  addr;
+
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
+            addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+            //
+            // epoll related.
+            struct epoll_event  ev, *events;
+            int                 event_num;
+
+            events = (struct epoll_event *)malloc(sizeof(struct epoll_event) * 11);
+
+            if (this_node.role != ROLE_SERVER 
+                || epoll_init_flag == true)
+                return false;
+
+            if ((sock_listen_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+                return false;
+
+            setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&bsize, sizeof(bsize));
+
+            if (bind(
+                    sock_listen_fd, 
+                    (struct sockaddr*)&addr, 
+                    sizeof(addr)) == -1)
+                return false;
+std::cout << "Phase 1\n";
+            if (epoll_fd = epoll_create(512) > 0) 
+                epoll_init_flag = true;
+
+            else return false;
+
+            ev.events  = EPOLLIN | EPOLLOUT | EPOLLERR;
+            ev.data.fd = epoll_fd;
+
+            epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_listen_fd, &ev);
+
+            while (1) {
+            
+                event_num = epoll_wait(epoll_fd, events, 11, -1); 
+
+                for (int i = 0; i < event_num; i++) {
+
+                    // If event has been on (sock_listen_fd)
+                    if (events[i].data.fd == sock_listen_fd) {
+                        
+                        struct sockaddr_in  client_sockaddr;
+                        socklen_t           client_socklen;
+                        int                 sock_client_fd = -1;
+
+                        sock_client_fd = accept(sock_listen_fd, (struct sockaddr *)&client_sockaddr, &client_socklen);
+                        
+                        std::string dump_info{getObjDump()};
+
+                        write(sock_client_fd, dump_info.c_str(), dump_info.size());
+
+                    }
+                }
+            }
+
+
+
+
+
+
+
+
+
+            
+
+
+            return true;
+        }
+
+        //
+        // This is raw test code.
+        bool doTestClient() {
+            
+            int sock_conn_fd = -1;
+
+            // Find a server info.
+            struct Node server;
+            char* buf[8192] = { 0, };
+
+            for (auto& member: players) 
+                if (member.role == ROLE_SERVER)
+                    server = member;
+
+            if (sock_conn_fd = socket(AF_INET, SOCK_STREAM, 0) < 0 )
+                return false;
+
+            // if (connect(
+            //     sock_conn_fd,
+            //     (struct sockaddr *)&server.sockaddr, sizeof(server.sockaddr)
+            // ) == -1)
+            //     return false;
+
+            // // write(sock_conn_fd, sample_str, 12);
+            // read(sock_conn_fd, buf, 100);
+
+            // std::cout << buf << std::endl;
+
+
+            return true;
+        }
+
+
 
     };
 

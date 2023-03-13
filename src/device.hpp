@@ -18,22 +18,6 @@
 
 namespace hartebeest {
 
-#define DEFAULT_NODE_ID     (-0x00ff)
-
-    // Node Settings
-    struct Node {
-    private:
-        int32_t     id;
-
-    public:
-        Node() : id(DEFAULT_NODE_ID) {};
-        Node(int32_t arg_id) : id(arg_id) {};
-        ~Node() = default;
-
-        void            setId(int32_t) = delete; // RAII
-        const int32_t   getId() const { return id; };
-    };
-
     //
     // The inteface naming convention is designed to have:
     //  - do** : These are management functions. 

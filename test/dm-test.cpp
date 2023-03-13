@@ -17,19 +17,6 @@ int main() {
 #define __TEST_START__  spdlog::info("******** Start ********"); {
 #define __TEST_END__    } spdlog::info("******** End ********\n");
 
-    spdlog::info("Unit test 1: Node Instance Test");
-    __TEST_START__
-
-        spdlog::info("Node test.");
-
-        hartebeest::Node node_0;
-        hartebeest::Node node_1(12);
-
-        spdlog::info("node_0 ID: {}", node_0.getId());
-        spdlog::info("node_1 ID: {}", node_1.getId());
-
-    __TEST_END__
-
     //
     // 
     spdlog::info("Unit test 2: HcaDevice Safety Test");

@@ -25,26 +25,37 @@ int main() {
 
     if (ret) spdlog::info("READ File OK");
     else {
-        spdlog::info("Failed to read {}", file_path);
+        spdlog::error("Failed to read {}", file_path);
     }
 
     ret = exchanger.doReadConfigFile();
 
     if (ret) spdlog::info("READ File OK");
     else {
-        spdlog::info("Failed to read {}", hartebeest::EXCH_CONF_DEFAULT_PATH);
+        spdlog::error("Failed to read {}", hartebeest::EXCH_CONF_DEFAULT_PATH);
         return 0;
     }
 
+    std::string str_dump = exchanger.getObjDump();
 
+    if (str_dump != "") spdlog::info("Dump: {}", str_dump);
+    else {
+        spdlog::error("Failed to parse {}", hartebeest::EXCH_CONF_DEFAULT_PATH);
+        return 0;
+    }
 
+    spdlog::info("Inner players status check.");
 
+    int num_players = exchanger.getNumOfPlayers();
+    spdlog::info("Number of players set: {}", num_players);
 
+    spdlog::info("Reading...");
+    for (int idx = 0; idx < num_players; idx++) {
+        int node_id = exchanger.getPlayer(idx).node_id;
+        int role = exchanger.getPlayer(idx).role;
 
-
-
-
-
+        spdlog::info("node_id: {}, role: {}", node_id, role);
+    }
 
     return 0;
 }
