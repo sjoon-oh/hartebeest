@@ -264,7 +264,7 @@ int main() {
     }
 
     // configurator.doExportAll("config.json");
-    configurator.doExportAll();
+    configurator.doExportAll(0);
 
     return 0;
 }

@@ -16,6 +16,8 @@
 #include <ostream>
 #include <iostream>
 
+#include <cstdlib>
+
 // for serv, cli
 #include <arpa/inet.h>
 // #include <sys/types.h>
@@ -313,11 +315,11 @@ namespace hartebeest {
         //  JSON file. The header-only JSON parser library for C++ (https://github.com/nlohmann/json) 
         //  is used in this function. 
         //  Check the source in the "extern" directory.
-        bool doExportAll(std::string arg_export_path = RDMA_MY_CONF_PATH) {
+        bool doExportAll(int arg_my_node_id, std::string arg_export_path = RDMA_MY_CONF_PATH) {
 
             nlohmann::json export_obj;
             
-            export_obj["node_id"] = 0;
+            export_obj["node_id"] = arg_my_node_id;
             export_obj["qp_conn"] = nlohmann::json::array();
 
             for (const auto& elem : qp_pd_regbook) {
@@ -532,6 +534,8 @@ namespace hartebeest {
 
         int getThisNodeIdx() { return this_node_idx; }
         int getThisNodeRole() { return players.at(this_node_idx).role; }
+        int getThisNodeId() { return players.at(this_node_idx).node_id; }
+        
         nlohmann::json getThisNodeRdmaInfo() {
             return players.at(this_node_idx).rdma_info;
         }
@@ -728,6 +732,7 @@ namespace hartebeest {
                 
                 for (auto& member: players) {
                     if (member.role == ROLE_SERVER) continue;
+                    if (member.state == STATE_DISTRIBUTED) continue;
 
                     // The ConfigFileExchanger does not assume the config file to be extremely large. 
                     // The size of the file must be reasonaly set.
@@ -737,7 +742,7 @@ namespace hartebeest {
                     if ((sent_sz = write(member.fd, post_conf.dump().c_str(), post_conf.dump().size())) == -1)
                         goto exit_srv;
 
-                    member.role = STATE_DISTRIBUTED;
+                    member.state = STATE_DISTRIBUTED;
                 }
             }
 
@@ -772,19 +777,21 @@ exit_srv:
 
             else
                 recv_buf = new char[BUFFER_SIZE];
+            
+
 
             struct sockaddr_in serv_sockaddr_info = server_node.sockaddr_info;
 
             if ((sock_conn_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
                 goto exit_cli;
 
-            if (connect(
+            // Retry
+            while (connect(
                     sock_conn_fd,
                     (struct sockaddr *)&serv_sockaddr_info, 
                     sizeof(serv_sockaddr_info)
                 ) == -1)
-                goto exit_cli;
-
+                sleep(1);
 
             this_node_dump = getThisNodeRdmaInfo().dump();
 
@@ -792,7 +799,11 @@ exit_srv:
             write(sock_conn_fd, this_node_dump.c_str(), this_node_dump.size());
 
             // Receive All infos.
+            memset(recv_buf, 0, sizeof(char) * BUFFER_SIZE);
             read(sock_conn_fd, recv_buf, BUFFER_SIZE);
+
+            post_conf = nlohmann::json::parse(std::string(recv_buf));
+            __exportAllConfs();
 
             ret = true;
 exit_cli:
@@ -800,6 +811,15 @@ exit_cli:
             return ret;
         }
 
+        bool doExchange() {
+
+            if (getPlayerServer().node_id == this_node_idx)
+                return doRunServer();
+            
+            else {
+                return doRunClient();
+            }
+        }
     };
 
 }

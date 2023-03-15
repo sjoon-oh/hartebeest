@@ -16,6 +16,7 @@ set(RC_TEST_TARGET hartebeest-rc-test.run)
 set(JSON_TEST_TARGET hartebeest-json-test.run)
 set(FILE_TEST_TARGET hartebeest-file-test.run)
 set(COMM_TEST_TARGET hartebeest-comm-test.run)
+set(DEMO_TARGET demo.run)
 
 # Device Manager Test
 add_executable(
@@ -71,9 +72,19 @@ set_target_properties(
     ${COMM_TEST_TARGET} 
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
+# Demo
+add_executable(
+    ${DEMO_TARGET}
+    ${CMAKE_SOURCE_DIR}/test/conn-test.cpp 
+)
+set_target_properties(
+    ${DEMO_TARGET} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build)
 
+# Essentials
 target_link_libraries(${DM_TEST_TARGET}     PUBLIC ibverbs)
 target_link_libraries(${PM_TEST_TARGET}     PUBLIC ibverbs)
 target_link_libraries(${RC_TEST_TARGET}     PUBLIC ibverbs)
 target_link_libraries(${FILE_TEST_TARGET}   PUBLIC ibverbs)
 target_link_libraries(${COMM_TEST_TARGET}   PUBLIC ibverbs)
+target_link_libraries(${DEMO_TARGET}        PUBLIC ibverbs)
