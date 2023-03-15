@@ -41,11 +41,11 @@ int main() {
 
     //
     // 2. File check
-    std::string str_dump = exchanger.getObjDump();
+    std::string str_dump = exchanger.getPreObjDump();
 
     if (str_dump != "") spdlog::info("Dump: {}", str_dump);
     else {
-        spdlog::error("Failed to parse {}", hartebeest::EXCH_CONF_DEFAULT_PATH);
+        spdlog::error("Failed to parse {}", hartebeest::RDMA_MY_CONF_PATH);
         return 0;
     }
 
@@ -58,6 +58,12 @@ int main() {
         );
     }
 
+    // Load rdma_conf for this node.
+    if (exchanger.setThisNodeConf() == false) {
+        spdlog::error("Cannot set rdma_conf file of this node.");
+        return -1;
+    }
+
     //
     // 3. Check roles
     spdlog::info("What role am I?");
@@ -66,8 +72,8 @@ int main() {
         == hartebeest::ROLE_SERVER) {
         spdlog::info("I am a distributer.");
     
-        if ((ret = exchanger.doTestServer()) == false)
-            spdlog::error("doTestServer() Error.");
+        if ((ret = exchanger.doRunServer()) == false)
+            spdlog::error("doRunServer() Error.");
 
 
     }
@@ -76,8 +82,8 @@ int main() {
         spdlog::info("I am a passive player.");
 
 
-        if ((ret = exchanger.doTestClient()) == false)
-            spdlog::error("doTestClient() Error.");
+        if ((ret = exchanger.doRunClient()) == false)
+            spdlog::error("doRunClient() Error.");
 
     }   
 

@@ -9,23 +9,17 @@
 
 namespace hartebeest {
 
-    const std::string RDMA_CONF_DEFAULT_PATH{"hb_rdma_post_config.json"};
-    const std::string EXCH_CONF_DEFAULT_PATH{"hb_rdma_pre_config.json"};
+    const std::string RDMA_MY_CONF_PATH{"hb-rdma-my-conf.json"};
+    const std::string RDMA_CONF_DEFAULT_PATH{"hb-rdma-post-conf.json"};
+    const std::string EXCH_CONF_DEFAULT_PATH{"hb-rdma-pre-conf.json"};
 
     const std::array<std::string, 6> KEY_PRECONF{
         "port", "index", "participants", "node_id", "ip", "alias"
     };
 
-    enum {
-        PORT = 0,
-        INDEX,
-        PARTICIPANTS,
-        NODE_ID,
-        IP,
-        ALIAS
+    const std::array<std::string, 2> KEY_POSTCONF{
+        "node_id", "qp_conn"
     };
-
-#define __KEY(X)    (KEY_PRECONF.at(X))
 
     enum { 
         ROLE_SERVER = 0,
@@ -49,8 +43,11 @@ namespace hartebeest {
 
     enum {
         STATE_UNKNOWN = 0xff,
-        STATE_CONNECTED,
-        STATE_DONE
+        STATE_FILLED,
+        STATE_DISTRIBUTED
     };
+
+
+
 
 }

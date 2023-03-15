@@ -263,9 +263,8 @@ int main() {
         return 0;
     }
 
-    configurator.doExportAll("config.json");
-
-    getchar();
+    // configurator.doExportAll("config.json");
+    configurator.doExportAll();
 
     return 0;
 }

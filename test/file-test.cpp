@@ -36,7 +36,7 @@ int main() {
         return 0;
     }
 
-    std::string str_dump = exchanger.getObjDump();
+    std::string str_dump = exchanger.getPreObjDump();
 
     if (str_dump != "") spdlog::info("Dump: {}", str_dump);
     else {

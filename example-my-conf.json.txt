@@ -1,0 +1,17 @@
+{
+    "node_id": 0,
+    "qp_conn": [
+        {
+            "port_id": 1,
+            "port_lid": 6,
+            "qp_name": "some-qp-1",
+            "qp_num": 21029
+        },
+        {
+            "port_id": 1,
+            "port_lid": 6,
+            "qp_name": "some-qp-2",
+            "qp_num": 21030
+        }
+    ]
+}
