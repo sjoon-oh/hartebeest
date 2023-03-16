@@ -16,7 +16,7 @@ set(LIB_HARTEBEEST libhartebeest)
 # Demo
 add_executable(
     ${DEMO_TARGET}
-    ${CMAKE_SOURCE_DIR}/test/conn-test.cpp 
+    ${CMAKE_SOURCE_DIR}/test/demo.cpp 
 )
 set_target_properties(
     ${DEMO_TARGET} 

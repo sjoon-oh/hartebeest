@@ -114,6 +114,11 @@ namespace hartebeest {
             return mr_list.at(getMrIdx(arg_mr_name)).get();            
         }
 
+        void* getMrAddr(std::string arg_mr_name) {
+            struct ibv_mr* mr = getMr(arg_mr_name);
+            return mr->addr;
+        }
+
         uint32_t getMrLocalKey(std::string arg_mr_name) {
             struct ibv_mr* mr = getMr(arg_mr_name);
             return mr == nullptr ? 0 : mr->lkey;

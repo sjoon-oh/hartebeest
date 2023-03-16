@@ -11,6 +11,9 @@
 
 #include "../src/rdma-conf.hpp"
 
+#include <cstring>
+#include <cstdlib>
+
 int main() {
 
     spdlog::set_pattern("[%H:%M:%S] [%L] [thread %t] %v");
@@ -19,13 +22,12 @@ int main() {
     hartebeest::ConfigFileExchanger     exchr;
 
     std::string funcn = "";
+    std::string buf_dummy{"I am hartebeest dummy."};
     bool ret;
 
-    
-    
+    int other_node_id = 0;
 
 #define __TEST__(X)     if ((X)) ; else goto FAIL;
-
 
     //
     // Initialize device
@@ -33,7 +35,7 @@ int main() {
     __TEST__((ret = confr.doInitDevice()) == true)
 
     // Load configuration file
-    funcn = "ConfigFileExchanger::doInitDevice()";
+    funcn = "ConfigFileExchanger::doReadConfigFile()";
     __TEST__((ret = exchr.doReadConfigFile()) == true) 
 
     //
@@ -44,6 +46,11 @@ int main() {
     __TEST__((ret = confr.doAllocateBuffer("buffer-3", 512, 64)) == true) 
     __TEST__((ret = confr.doAllocateBuffer("buffer-4", 512, 64)) == true) 
     __TEST__((ret = confr.doAllocateBuffer("buffer-5", 512, 64)) == true) 
+    __TEST__((ret = confr.doAllocateBuffer("buffer-6", 512, 64)) == true)
+    __TEST__((ret = confr.doAllocateBuffer("buffer-7", 512, 64)) == true) 
+    __TEST__((ret = confr.doAllocateBuffer("buffer-8", 512, 64)) == true) 
+    __TEST__((ret = confr.doAllocateBuffer("buffer-9", 512, 64)) == true) 
+    __TEST__((ret = confr.doAllocateBuffer("buffer-10", 512, 64)) == true) 
 
     //
     // Protection Domain Generate Test
@@ -58,7 +65,12 @@ int main() {
     __TEST__((ret = confr.doCreateAndRegisterMr("pd-1", "buffer-2", "mr-2")) == true) 
     __TEST__((ret = confr.doCreateAndRegisterMr("pd-1", "buffer-3", "mr-3")) == true) 
     __TEST__((ret = confr.doCreateAndRegisterMr("pd-2", "buffer-4", "mr-4")) == true) 
-    __TEST__((ret = confr.doCreateAndRegisterMr("pd-2", "buffer-5", "mr-5")) == true) 
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-2", "buffer-5", "mr-5")) == true)
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-1", "buffer-6", "mr-6")) == true) 
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-1", "buffer-7", "mr-7")) == true) 
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-1", "buffer-8", "mr-8")) == true) 
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-2", "buffer-9", "mr-9")) == true) 
+    __TEST__((ret = confr.doCreateAndRegisterMr("pd-2", "buffer-10", "mr-10")) == true) 
 
 
     funcn = "RdmaConfigurator::doCreateAndRegisterCq()";
@@ -87,10 +99,15 @@ int main() {
     funcn = "ConfigFileExchanger::setThisNodeConf()";
     __TEST__((ret = exchr.setThisNodeConf()) == true)
 
-    if (exchr.getThisNodeRole() == hartebeest::ROLE_SERVER)
+    if (exchr.getThisNodeRole() == hartebeest::ROLE_SERVER) {
         spdlog::info("Playing server role.");
+        other_node_id = 1;
+    }
     
-    else spdlog::info("Playing client role.");
+    else {
+        spdlog::info("Playing client role.");
+        other_node_id = 0;
+    }
 
     // spdlog::info("Paused. Press any key to continue.");
     // getchar();
@@ -103,22 +120,53 @@ int main() {
     funcn = "RdmaConfigurator::doConnectRcQp()";
     __TEST__((ret = confr.doConnectRcQp(
             "qp-1",
-            exchr.getOtherNodePortId(1, "qp-1"),
-            exchr.getOtherNodeQpn(1, "qp-1"),
-            exchr.getOtherNodePortLid(1, "qp-1")
+            exchr.getOtherNodePortId(other_node_id, "qp-1"),
+            exchr.getOtherNodeQpn(other_node_id, "qp-1"),
+            exchr.getOtherNodePortLid(other_node_id, "qp-1")
         )) == true)
 
-    
+    sleep(1);
 
+    // Pause for a second.
+    if (exchr.getThisNodeRole() == hartebeest::ROLE_CLIENT) {
+        while ((std::string((char* )confr.getMrManager().getMrAddr("mr-1")) != buf_dummy)) {
 
+            sleep(1);
+            spdlog::info("Memory Region Read: {}", 
+                (char *)confr.getMrManager().getMrAddr("mr-1"));
+        }
 
+        spdlog::info("Check finished.");
+    }
+    else {
 
+        // Server sends
+        memcpy(
+            confr.getMrManager().getMrAddr("mr-1"),     // Destination
+            buf_dummy.c_str(),                          // Source
+            buf_dummy.size()                            // Size
+        );
 
+        spdlog::info("Dummy string copied: at [{}]", confr.getMrManager().getMrAddr("mr-1"));
+        spdlog::info("                   : {}", (char *)confr.getMrManager().getMrAddr("mr-1"));
 
+        // Connected to each 'qp-1's
+        funcn = "RdmaConfigurator::doBuildSendWr()";
+        __TEST__( 
+            confr.doPosrSendWr(
+                "qp-1",             // My QP name
+                confr.getMrManager().getMrAddr("mr-1"),
+                buf_dummy.size(),
+                confr.getMrManager().getMrLocalKey("mr-1"),
+                exchr.getOtherNodeMrAddr(other_node_id, "mr-1"),
+                exchr.getOtherNodeMrRk(other_node_id, "mr-1")
+                )
+            == true)
 
+        spdlog::info("Server paused: Press any key to continue;");
+        getchar();
 
-
-
+    }
 
 
     spdlog::info("End reached.");

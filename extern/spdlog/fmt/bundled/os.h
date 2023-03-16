@@ -374,7 +374,7 @@ struct buffer_size {
 
 struct ostream_params {
   int oflag = file::WRONLY | file::CREATE | file::TRUNC;
-  size_t buffer_size = BUFSIZ > 32768 ? BUFSIZ : 32768;
+  size_t buffer_size = BUFSIZ > 8192 ? BUFSIZ : 8192;
 
   ostream_params() {}
 

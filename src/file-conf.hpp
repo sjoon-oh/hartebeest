@@ -9,9 +9,9 @@
 
 namespace hartebeest {
 
-    const std::string RDMA_MY_CONF_PATH{"hb-rdma-my-conf.json"};
-    const std::string RDMA_CONF_DEFAULT_PATH{"hb-rdma-post-conf.json"};
-    const std::string EXCH_CONF_DEFAULT_PATH{"hb-rdma-pre-conf.json"};
+    const std::string RDMA_MY_CONF_PATH{"this-node-conf.json"};
+    const std::string RDMA_CONF_DEFAULT_PATH{"post-all-conf.json"};
+    const std::string EXCH_CONF_DEFAULT_PATH{"pre-all-conf.json"};
 
     enum { 
         ROLE_SERVER = 0,
