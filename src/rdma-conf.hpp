@@ -88,6 +88,10 @@ namespace hartebeest {
         std::map<std::string, std::string>  qp_pd_regbook;
         std::map<std::string, int>          cq_ctx_regbook;
 
+        // Work Requests lists
+        std::map<std::string, std::vector<struct ibv_wc>>
+                                            cq_watchp_list;
+
     public:
         RdmaConfigurator() : dev_init(false) {
             
@@ -233,7 +237,8 @@ namespace hartebeest {
                 arg_pd_name, 
                 addr, 
                 len, 
-                0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
+                0 | IBV_ACCESS_LOCAL_WRITE | 
+                    IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
             );
 
             if (mr == nullptr) return false;
@@ -251,6 +256,9 @@ namespace hartebeest {
             // If arg_mr_name is associated to some context, it cannot be registered.
             if (isCqAssociated(arg_cq_name)) return false;
             cq_ctx_regbook.insert(std::pair<std::string, int>(arg_cq_name, 0));
+            cq_watchp_list.insert(
+                std::pair<std::string, std::vector<struct ibv_wc>>(arg_cq_name, std::vector<struct ibv_wc>{})
+            );
 
             return
                 qs_manager->doRegisterCq(
@@ -338,7 +346,7 @@ namespace hartebeest {
                     {
                         {"mr_name", mr_name},
                         {"pd_name", pd_name},
-                        {"addr", (unsigned long)(mr_manager->getMrAddr(mr_name))},
+                        {"addr", (uintptr_t)(mr_manager->getMrAddr(mr_name))},
                         {"lk", mr_manager->getMrLocalKey(mr_name)},
                         {"rk", mr_manager->getMrRemoteKey(mr_name)}
                     }
@@ -377,7 +385,7 @@ namespace hartebeest {
 
         bool doPosrSendWr(
             std::string arg_qp_name,
-            void* arg_buf, 
+            uintptr_t arg_buf, 
             uint32_t arg_len, 
             uint32_t arg_lk,
             uintptr_t arg_remote_addr,
@@ -395,7 +403,7 @@ namespace hartebeest {
             memset(&sg_elem, 0, sizeof(sg_elem));
             memset(&work_req, 0, sizeof(work_req));
 
-            sg_elem.addr        = reinterpret_cast<uintptr_t>(arg_buf);
+            sg_elem.addr        = arg_buf;
             sg_elem.length      = arg_len;
             sg_elem.lkey        = arg_lk;
 
@@ -420,6 +428,29 @@ namespace hartebeest {
             }
 
             return true;
+        }
+
+
+        int doPollSingleCq(std::string arg_cq_name) {
+            int num_wc = 0;
+            struct ibv_wc wc;
+
+            struct ibv_cq* cq = qs_manager->getCq(arg_cq_name);
+            std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
+
+            num_wc = ibv_poll_cq(cq, 1, &wc);
+            watch_list.push_back(wc);
+
+            return num_wc;
+        }
+
+        int doClearCqWatchlist(std::string arg_cq_name) {
+            
+            std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
+            int num_wcs = watch_list.size();
+
+            watch_list.clear();
+            return num_wcs;
         }
 
     };
@@ -585,7 +616,7 @@ namespace hartebeest {
             return true;
         }
 
-        bool __runServer(int arg_buf_size = 8192, int arg_max_client = 11) {
+        bool __runServer(int arg_buf_size = 81920, int arg_max_client = 11) {
             
             int                 bsize = 1;
             char*               buf = nullptr;
@@ -679,8 +710,6 @@ namespace hartebeest {
                                 recv_sz = read(sock_client_fd, member.buf + member.recv_sz, BUFFER_SIZE - member.recv_sz);
                                 member.recv_sz += recv_sz;
 
-                                std::cout << "Received: " << member.buf << std::endl;
-
                                 if (recv_sz == -1) goto exit_srv;
                                 if (__recordSingleConf(member.buf, client_sockaddr, sock_client_fd) == false)
                                     continue;
@@ -729,7 +758,7 @@ exit_srv:
         }
 
         //
-        bool __runClient(int arg_buf_size = 8192) {
+        bool __runClient(int arg_buf_size = 81920) {
             
             int                 this_node_id = getThisNodeId();
             char*               buf = nullptr;
@@ -904,7 +933,7 @@ public:
             return __getOtherNodeQp(arg_node_id, arg_qp_name).at("plid");
         }
 
-        uint32_t getOtherNodeMrAddr(int arg_node_id, std::string arg_mr_name) {
+        uintptr_t getOtherNodeMrAddr(int arg_node_id, std::string arg_mr_name) {
             return __getOtherNodeMr(arg_node_id,arg_mr_name).at("addr");
         }
 

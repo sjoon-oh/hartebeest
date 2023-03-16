@@ -102,8 +102,6 @@ namespace hartebeest {
         ~DeviceManager() {
             if (raw_dev_list != nullptr)
                 ibv_free_device_list(raw_dev_list);
-
-            std::cout << "~DeviceManager()\n";
         };
 
         bool doGetDevice() {

@@ -23,9 +23,12 @@ int main() {
 
     std::string funcn = "";
     std::string buf_dummy{"I am hartebeest dummy."};
+    char* mr_addr;
+
     bool ret;
 
     int other_node_id = 0;
+    int num_wcs;
 
 #define __TEST__(X)     if ((X)) ; else goto FAIL;
 
@@ -118,31 +121,36 @@ int main() {
     // In this test, QPs with identical name will be connected.
     // QP connection test.
     funcn = "RdmaConfigurator::doConnectRcQp()";
-    __TEST__((ret = confr.doConnectRcQp(
-            "qp-1",
-            exchr.getOtherNodePortId(other_node_id, "qp-1"),
-            exchr.getOtherNodeQpn(other_node_id, "qp-1"),
-            exchr.getOtherNodePortLid(other_node_id, "qp-1")
-        )) == true)
+    if (exchr.getThisNodeRole() == hartebeest::ROLE_SERVER)
+        __TEST__((ret = confr.doConnectRcQp(
+                "qp-1",
+                exchr.getOtherNodePortId(other_node_id, "qp-1"),
+                exchr.getOtherNodeQpn(other_node_id, "qp-1"),
+                exchr.getOtherNodePortLid(other_node_id, "qp-1")
+            )) == true)
 
     sleep(1);
 
     // Pause for a second.
+
     if (exchr.getThisNodeRole() == hartebeest::ROLE_CLIENT) {
-        while ((std::string((char* )confr.getMrManager().getMrAddr("mr-1")) != buf_dummy)) {
+
+        mr_addr = (char*)confr.getMrManager().getMrAddr("mr-1");
+
+        while ((std::string(mr_addr) != buf_dummy)) {
+            spdlog::info("mr-1 Read: {}", mr_addr);
 
             sleep(1);
-            spdlog::info("Memory Region Read: {}", 
-                (char *)confr.getMrManager().getMrAddr("mr-1"));
         }
 
         spdlog::info("Check finished.");
     }
     else {
-
+        
+        //
         // Server sends
         memcpy(
-            confr.getMrManager().getMrAddr("mr-1"),     // Destination
+            (void*)confr.getMrManager().getMrAddr("mr-1"),     // Destination
             buf_dummy.c_str(),                          // Source
             buf_dummy.size()                            // Size
         );
@@ -151,7 +159,7 @@ int main() {
         spdlog::info("                   : {}", (char *)confr.getMrManager().getMrAddr("mr-1"));
 
         // Connected to each 'qp-1's
-        funcn = "RdmaConfigurator::doBuildSendWr()";
+        funcn = "RdmaConfigurator::doPosrSendWr()";
         __TEST__( 
             confr.doPosrSendWr(
                 "qp-1",             // My QP name
@@ -163,8 +171,11 @@ int main() {
                 )
             == true)
 
-        spdlog::info("Server paused: Press any key to continue;");
-        getchar();
+        // spdlog::info("Server paused: Press any key to continue;");
+        // getchar();
+
+        num_wcs = confr.doPollSingleCq("send-cq-1");
+        spdlog::info("Number of Work Completion: {}", num_wcs);
 
     }
 

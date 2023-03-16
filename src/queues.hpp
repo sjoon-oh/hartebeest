@@ -253,7 +253,7 @@ namespace hartebeest {
             init_attr.qp_state          = IBV_QPS_INIT;
             init_attr.pkey_index        = 0;
             init_attr.port_num          = static_cast<uint8_t>(arg_port_id);
-            init_attr.qp_access_flags   = 0 | IBV_ACCESS_LOCAL_WRITE; // Local Read + ...
+            init_attr.qp_access_flags   = 0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE; // Local Read + ...
 
             auto ret = ibv_modify_qp(
                 getQp(arg_qp_name), 
@@ -271,7 +271,6 @@ namespace hartebeest {
             uint32_t arg_remote_qpn,
             uint16_t arg_remote_lid
         ) {
-            
             struct ibv_qp_attr connect_attr;
             memset(&connect_attr, 0, sizeof(struct ibv_qp_attr));
 

@@ -44,9 +44,7 @@ namespace hartebeest {
 
     public:
         PdManager() {}
-        ~PdManager() {
-            std::cout << "~PdManager()\n";
-        }
+        ~PdManager() {}
 
         //
         // The inteface naming convention is designed to have:
