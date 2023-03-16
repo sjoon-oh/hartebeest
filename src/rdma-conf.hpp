@@ -2,7 +2,7 @@
 
 /* github.com/sjoon-oh/hartebeest
  * Author: Sukjoon Oh, sjoon@kaist.ac.kr
- * RdmaConfigurator.hpp
+ * rdma-conf.hpp
  * 
  * Project hartebeest is a RDMA(IB) connector,
  *  a refactored version from Mu.
@@ -248,7 +248,7 @@ namespace hartebeest {
         bool doCreateAndRegisterCq(std::string arg_cq_name) {
             
             // If arg_mr_name is associated to some context, it cannot be registered.
-            if (isCqAssociated(arg_cq_name)) false;
+            if (isCqAssociated(arg_cq_name)) return false;
             cq_ctx_regbook.insert(std::pair<std::string, int>(arg_cq_name, 0));
 
             return
@@ -269,7 +269,7 @@ namespace hartebeest {
             std::string arg_recv_cq_name
         ) {
 
-            if (isQpAssociated(arg_qp_name)) false;
+            if (isQpAssociated(arg_qp_name)) return false;
             qp_pd_regbook.insert(std::pair<std::string, std::string>(arg_qp_name, arg_pd_name));
 
             return
@@ -490,163 +490,7 @@ namespace hartebeest {
             return true;
         }
 
-    public:
-        ConfigFileExchanger() : 
-            this_node_idx(-1),
-            epoll_init_flag(false) {
-                
-            }
-        ~ConfigFileExchanger() {}
-
-        //
-        // Getters and Setters. Follows the same naming convention.
-        std::string getPreObjDump() {
-            return pre_conf.dump();  // set pretty off.
-        }
-
-        int getNumOfPlayers() {
-            return players.size();
-        }
-
-        int getPlayerIdx(uint32_t arg_node_id) {
-            int ret = -1;
-
-            for (int i = 0; i < players.size(); i++) 
-                if (players.at(i).node_id == arg_node_id)
-                    return i;
-
-            return ret;
-        }
-
-        struct Node getPlayer(uint32_t arg_idx) {
-            return players.at(arg_idx);
-        }
-
-        struct Node getPlayerServer() { 
-            struct Node server;
-
-            for (auto member: players) 
-                if (member.role == ROLE_SERVER)
-                    server = member;
-
-            return server;
-        }
-
-        int getThisNodeIdx() { return this_node_idx; }
-        int getThisNodeRole() { return players.at(this_node_idx).role; }
-        int getThisNodeId() { return players.at(this_node_idx).node_id; }
-        
-        nlohmann::json getThisNodeRdmaInfo() {
-            return players.at(this_node_idx).rdma_info;
-        }
-
-        void setPostConf(nlohmann::json arg_post_conf) {
-            post_conf = arg_post_conf;
-        }
-
-        void setPostConf(std::string arg_post_conf_str) {
-            post_conf = arg_post_conf_str;
-        }
-
-        bool setThisNodeConf(std::string arg_conf_path = RDMA_MY_CONF_PATH) {
-
-            nlohmann::json rdma_conf;
-            std::ifstream conf_input(arg_conf_path);
-
-            if (conf_input.fail()) 
-                return false;
-
-            conf_input >> rdma_conf;
-            players.at(this_node_idx).rdma_info = rdma_conf;
-
-            return true;
-        }
-
-        bool isEveryoneInState(int arg_state) {
-            bool ret = true;
-            
-            for (auto& member: players) 
-                if (member.state != arg_state) ret = false;
-            
-            return ret;
-        }
-
-        bool isKeyExist(nlohmann::json& arg_obj, std::string arg_key) {
-            try { arg_obj.at(arg_key); } 
-            catch (...) {
-                return false;
-            }
-
-            return false;
-        }
-
-        //
-        // Make sure to call doReadConfigFile() first,
-        //  before doing anything else. 
-        bool doReadConfigFile(std::string arg_conf_file_path = EXCH_CONF_DEFAULT_PATH) {
-            
-            bool ret = false;
-            std::ifstream conf_input(arg_conf_file_path);
-
-            if (conf_input.fail()) 
-                return ret;
-
-            conf_input >> pre_conf;
-
-            //
-            // Basic configuration starts from here.
-            // Initializes "this_node"
-
-            // If any of the JSON defined form (e.g. existance of keys) do not meet, 
-            // this function returns false.
-            try {
-                pre_conf.at(
-                    "index"
-                    ).get_to(this_node_idx);
-
-                pre_conf.at("port").get_to(port);
-
-                // Note that this doReadConfigFile assumes the values are valid.
-                //  For instance, the function do not know how to handle conflicting node IDs,
-                //  or multiple nodes who claims to be a server (NODE_ID = 0).
-
-                for (auto& participant: pre_conf.at("participants")) {
-                    
-                    struct Node member;
-
-                    member.node_id = participant.at("node_id");
-
-                    if (member.node_id == 0)
-                        member.role = ROLE_SERVER;
-                    else member.role = ROLE_CLIENT;
-                    
-                    participant.at("ip").get_to(member.addr_str);
-
-                    // Socket related (Revive)                
-                    memset(&member.sockaddr_info, 0, sizeof(struct sockaddr_in));
-                    member.sockaddr_info.sin_family = AF_INET;
-                    member.sockaddr_info.sin_port = htons(port);
-
-                    ret = inet_aton(
-                            member.addr_str.c_str(), 
-                            &(member.sockaddr_info.sin_addr));   // Address Set
-
-                    // Initial connection state
-                    member.state = STATE_UNKNOWN;
-                    member.fd = -1;
-
-                    players.push_back(member);  // Register
-                }
-            }
-            catch (...) {
-                players.clear();
-                return false;
-            }
-
-            return ret;
-        }
-        
-        bool doRunServer(int arg_buf_size = 8192, int arg_max_client = 11) {
+        bool __runServer(int arg_buf_size = 8192, int arg_max_client = 11) {
             
             int                 bsize = 1;
             char*               recv_buf = nullptr;
@@ -756,7 +600,7 @@ exit_srv:
         }
 
         //
-        bool doRunClient(int arg_buf_size = 8192) {
+        bool __runClient(int arg_buf_size = 8192) {
 
             char*               recv_buf = nullptr;
             const int           BUFFER_SIZE = arg_buf_size;
@@ -778,8 +622,6 @@ exit_srv:
             else
                 recv_buf = new char[BUFFER_SIZE];
             
-
-
             struct sockaddr_in serv_sockaddr_info = server_node.sockaddr_info;
 
             if ((sock_conn_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -811,13 +653,197 @@ exit_cli:
             return ret;
         }
 
+
+    public:
+        ConfigFileExchanger() : 
+            this_node_idx(-1),
+            epoll_init_flag(false) {
+                
+            }
+        ~ConfigFileExchanger() {}
+
+        //
+        // Getters and Setters. Follows the same naming convention.
+        std::string getPreObjDump() {
+            return pre_conf.dump();  // set pretty off.
+        }
+
+        int getNumOfPlayers() {
+            return players.size();
+        }
+
+        int getPlayerIdx(int arg_node_id) {
+            int ret = -1;
+
+            for (size_t i = 0; i < players.size(); i++) 
+                if (players.at(i).node_id == arg_node_id)
+                    return i;
+
+            return ret;
+        }
+
+        struct Node getPlayer(uint32_t arg_idx) {
+            return players.at(arg_idx);
+        }
+
+        struct Node getPlayerServer() { 
+            struct Node server;
+
+            for (auto member: players) 
+                if (member.role == ROLE_SERVER)
+                    server = member;
+
+            return server;
+        }
+
+        int getThisNodeIdx() { return this_node_idx; }
+        int getThisNodeRole() { return players.at(this_node_idx).role; }
+        int getThisNodeId() { return players.at(this_node_idx).node_id; }
+        
+        nlohmann::json getThisNodeRdmaInfo() {
+            return players.at(this_node_idx).rdma_info;
+        }
+
+private:
+        nlohmann::json __getPostOtherNode(int arg_node_id, std::string arg_qp_name) {
+            std::string qp_name{};
+
+            for (auto& node: post_conf.at("all")) {
+                if (node.at("node_id") != arg_node_id) continue;
+
+                for (auto& qp: node.at("qp_conn")) {
+
+                    qp.at("qp_name").get_to(qp_name);
+                    if (qp_name == arg_qp_name)
+                        return qp;
+                }
+            }
+
+            return nlohmann::json{};
+        }
+
+public:
+        int getOtherNodeQpn(int arg_node_id, std::string arg_qp_name) {
+            return __getPostOtherNode(arg_node_id, arg_qp_name).at("qp_num");
+        }
+
+        int getOtherNodePortId(int arg_node_id, std::string arg_qp_name) {
+            return __getPostOtherNode(arg_node_id, arg_qp_name).at("port_id");
+        }
+
+        int getOtherNodePortLid(int arg_node_id, std::string arg_qp_name) {
+            return __getPostOtherNode(arg_node_id, arg_qp_name).at("port_lid");
+        }
+
+        void setPostConf(nlohmann::json arg_post_conf) {
+            post_conf = arg_post_conf;
+        }
+
+        void setPostConf(std::string arg_post_conf_str) {
+            post_conf = arg_post_conf_str;
+        }
+
+        bool setThisNodeConf(std::string arg_conf_path = RDMA_MY_CONF_PATH) {
+
+            nlohmann::json rdma_conf;
+            std::ifstream conf_input(arg_conf_path);
+
+            if (conf_input.fail()) 
+                return false;
+
+            conf_input >> rdma_conf;
+            players.at(this_node_idx).rdma_info = rdma_conf;
+
+            return true;
+        }
+
+        bool isEveryoneInState(int arg_state) {
+            bool ret = true;
+            
+            for (auto& member: players) 
+                if (member.state != arg_state) ret = false;
+            
+            return ret;
+        }
+
+        bool isKeyExist(nlohmann::json& arg_obj, std::string arg_key) {
+            return arg_obj.contains(arg_key);
+        }
+
+        //
+        // Make sure to call doReadConfigFile() first,
+        //  before doing anything else. 
+        bool doReadConfigFile(std::string arg_conf_file_path = EXCH_CONF_DEFAULT_PATH) {
+            
+            bool ret = false;
+            std::ifstream conf_input(arg_conf_file_path);
+
+            if (conf_input.fail()) 
+                return ret;
+
+            conf_input >> pre_conf;
+
+            //
+            // Basic configuration starts from here.
+            // Initializes "this_node"
+
+            // If any of the JSON defined form (e.g. existance of keys) do not meet, 
+            // this function returns false.
+            try {
+                pre_conf.at(
+                    "index"
+                    ).get_to(this_node_idx);
+
+                pre_conf.at("port").get_to(port);
+
+                // Note that this doReadConfigFile assumes the values are valid.
+                //  For instance, the function do not know how to handle conflicting node IDs,
+                //  or multiple nodes who claims to be a server (NODE_ID = 0).
+
+                for (auto& participant: pre_conf.at("participants")) {
+                    
+                    struct Node member;
+
+                    member.node_id = participant.at("node_id");
+
+                    if (member.node_id == 0)
+                        member.role = ROLE_SERVER;
+                    else member.role = ROLE_CLIENT;
+                    
+                    participant.at("ip").get_to(member.addr_str);
+
+                    // Socket related (Revive)                
+                    memset(&member.sockaddr_info, 0, sizeof(struct sockaddr_in));
+                    member.sockaddr_info.sin_family = AF_INET;
+                    member.sockaddr_info.sin_port = htons(port);
+
+                    ret = inet_aton(
+                            member.addr_str.c_str(), 
+                            &(member.sockaddr_info.sin_addr));   // Address Set
+
+                    // Initial connection state
+                    member.state = STATE_UNKNOWN;
+                    member.fd = -1;
+
+                    players.push_back(member);  // Register
+                }
+            }
+            catch (...) {
+                players.clear();
+                return false;
+            }
+
+            return ret;
+        }
+  
+
         bool doExchange() {
 
             if (getPlayerServer().node_id == this_node_idx)
-                return doRunServer();
+                return __runServer();
             
             else {
-                return doRunClient();
+                return __runClient();
             }
         }
     };

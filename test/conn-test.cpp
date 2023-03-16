@@ -87,25 +87,45 @@ int main() {
     funcn = "ConfigFileExchanger::setThisNodeConf()";
     __TEST__((ret = exchr.setThisNodeConf()) == true)
 
-    //
-    // 
+    if (exchr.getThisNodeRole() == hartebeest::ROLE_SERVER)
+        spdlog::info("Playing server role.");
+    
+    else spdlog::info("Playing client role.");
 
-    spdlog::info("Paused. Press any key to continue.");
-    getchar();
+    // spdlog::info("Paused. Press any key to continue.");
+    // getchar();
 
     funcn = "ConfigFileExchanger::doExchange()";
     __TEST__((ret = exchr.doExchange()) == true)
+
+    // In this test, QPs with identical name will be connected.
+    // QP connection test.
+    funcn = "RdmaConfigurator::doConnectRcQp()";
+    __TEST__((ret = confr.doConnectRcQp(
+            "qp-1",
+            exchr.getOtherNodePortId(1, "qp-1"),
+            exchr.getOtherNodeQpn(1, "qp-1"),
+            exchr.getOtherNodePortLid(1, "qp-1")
+        )) == true)
+
+    
+
+
+
+
+
+
+
 
 
 
 
 
     spdlog::info("End reached.");
-
     return 0;
 
 FAIL:
     spdlog::error("{} FAIL", funcn);
 
-    return 0;
+    return -1;
 }

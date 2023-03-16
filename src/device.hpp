@@ -49,10 +49,14 @@ namespace hartebeest {
 
         // Resets devices.
         bool doReset() {
-            if (context != nullptr)
+            if (context != nullptr) {
                 ibv_close_device(context);
-            
+
+                return false;
+            }            
+
             memset(&device_attr, 0, sizeof(device_attr));
+            return true;
         }
 
         // The HcaDevice instance does not initializes itself.
@@ -120,7 +124,7 @@ namespace hartebeest {
 
         } // This can throw exceptions.
 
-        bool doPortBind(int32_t arg_dev_id = 0, int32_t arg_index = 0) {
+        bool doPortBind(int32_t arg_dev_id = 0, uint32_t arg_index = 0) {
 
             HcaDevice& this_dev = hca_device_list.at(arg_dev_id);
 
