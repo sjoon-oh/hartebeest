@@ -69,7 +69,7 @@ namespace hartebeest {
         // Fixed vars.
         const int                   cq_depth = 128;
 
-        struct ibv_qp_init_attr     qp_init_attr;
+        struct ibv_qp_init_attr     common_init_attr;
         const int                   qp_wr_depth = 128;
         const int                   qp_sge_depth = 16;
         const int                   qp_max_inlining = 256;
@@ -81,12 +81,12 @@ namespace hartebeest {
             //  but may be updated in a program execution. 
             //  Never trust these values.
 
-            qp_init_attr.qp_type            = IBV_QPT_RC;
-            qp_init_attr.cap.max_send_wr    = qp_wr_depth;
-            qp_init_attr.cap.max_recv_wr    = qp_wr_depth;
-            qp_init_attr.cap.max_send_sge   = qp_sge_depth;
-            qp_init_attr.cap.max_recv_sge   = qp_sge_depth;
-            qp_init_attr.cap.max_inline_data = qp_max_inlining;
+            common_init_attr.qp_type            = IBV_QPT_RC;
+            common_init_attr.cap.max_send_wr    = qp_wr_depth;
+            common_init_attr.cap.max_recv_wr    = qp_wr_depth;
+            common_init_attr.cap.max_send_sge   = qp_sge_depth;
+            common_init_attr.cap.max_recv_sge   = qp_sge_depth;
+            common_init_attr.cap.max_inline_data = qp_max_inlining;
         }
 
         ~QueueManager() {
@@ -184,20 +184,22 @@ namespace hartebeest {
                 std::string arg_recv_cq_name
             ) {
             
+            //
             // Verifications.
             //  Should not be already registered.
             if (isQpRegistered(arg_qp_name)) return false;
             
+            //
             // Should have been registered.
             if (!isCqRegistered(arg_send_cq_name)) return false;
             if (!isCqRegistered(arg_recv_cq_name)) return false;
 
-            qp_init_attr.send_cq = getCq(arg_send_cq_name);
-            qp_init_attr.recv_cq = getCq(arg_recv_cq_name);
+            common_init_attr.send_cq = getCq(arg_send_cq_name);
+            common_init_attr.recv_cq = getCq(arg_recv_cq_name);
 
             //
             // Creates Queue Pair.
-            auto qp = ibv_create_qp(arg_pd, &qp_init_attr);
+            auto qp = ibv_create_qp(arg_pd, &common_init_attr);
             if (qp == nullptr) return false;
 
             auto uniq_qp = del_unique_ptr<struct ibv_qp>(qp, [](struct ibv_qp* arg_qp) {
@@ -253,7 +255,8 @@ namespace hartebeest {
             init_attr.qp_state          = IBV_QPS_INIT;
             init_attr.pkey_index        = 0;
             init_attr.port_num          = static_cast<uint8_t>(arg_port_id);
-            init_attr.qp_access_flags   = 0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE; // Local Read + ...
+            init_attr.qp_access_flags   = 
+                IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE; // Local Read + ...
 
             auto ret = ibv_modify_qp(
                 getQp(arg_qp_name), 

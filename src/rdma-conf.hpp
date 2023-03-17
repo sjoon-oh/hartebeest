@@ -238,7 +238,8 @@ namespace hartebeest {
                 addr, 
                 len, 
                 0 | IBV_ACCESS_LOCAL_WRITE | 
-                    IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
+                    IBV_ACCESS_REMOTE_READ | 
+                    IBV_ACCESS_REMOTE_WRITE
             );
 
             if (mr == nullptr) return false;
@@ -366,10 +367,10 @@ namespace hartebeest {
         // <Call Sequence 8>
         //  
         bool doConnectRcQp(
-            std::string arg_qp_name,
-            int arg_remote_port_id,
-            uint32_t arg_remote_qpn,
-            uint16_t arg_remote_lid
+            std::string     arg_qp_name,
+            int             arg_remote_port_id,
+            uint32_t        arg_remote_qpn,
+            uint16_t        arg_remote_lid
         ) {
             return 
                 qs_manager->doConnectRemoteRcQp(
@@ -377,19 +378,13 @@ namespace hartebeest {
                 );
         }
 
-        // struct ibv_send_wr doBuildSendWr() {
-        //     struct ibv_send_wr      work_req;
-
-        //     return work_req;
-        // }
-
-        bool doPosrSendWr(
-            std::string arg_qp_name,
-            uintptr_t arg_buf, 
-            uint32_t arg_len, 
-            uint32_t arg_lk,
-            uintptr_t arg_remote_addr,
-            uint32_t arg_remote_rk
+        bool doPostRdmaWrite(
+            std::string     arg_qp_name,
+            uintptr_t       arg_buf, 
+            uint32_t        arg_len, 
+            uint32_t        arg_lk,
+            uintptr_t       arg_remote_addr,
+            uint32_t        arg_remote_rk
         ) {
             
             int ret = 0;
@@ -407,10 +402,13 @@ namespace hartebeest {
             sg_elem.length      = arg_len;
             sg_elem.lkey        = arg_lk;
 
+            work_req.wr_id      = 0;
+            work_req.num_sge    = 1;
             work_req.opcode     = IBV_WR_RDMA_WRITE;
             work_req.send_flags = IBV_SEND_SIGNALED;
             work_req.wr_id      = 0;
             work_req.sg_list    = &sg_elem;
+            work_req.next       = nullptr;
 
             work_req.wr.rdma.remote_addr    = arg_remote_addr;
             work_req.wr.rdma.rkey           = arg_remote_rk;
@@ -418,12 +416,10 @@ namespace hartebeest {
             ret = ibv_post_send(target_qp , &work_req, &bad_work_req);
             
             if (bad_work_req != nullptr) {
-                std::cout << "bad_work_req not null\n";
                 return false;
             }
 
             if (ret != 0) {
-                std::cout << "ret: " << ret << "\n";
                 return false;
             }
 
@@ -439,7 +435,9 @@ namespace hartebeest {
             std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
 
             num_wc = ibv_poll_cq(cq, 1, &wc);
-            watch_list.push_back(wc);
+            
+            if (wc.status != IBV_WC_SUCCESS) return -1;
+            if (num_wc >= 0) watch_list.push_back(wc);
 
             return num_wc;
         }
@@ -745,6 +743,7 @@ namespace hartebeest {
                     }
 
                     member.state = STATE_DISTRIBUTED;
+                    close(member.fd);
                 }
             }
 
@@ -753,6 +752,8 @@ exit_srv:
             // Cleans up allocated resources.
             delete[] buf;
             free(events);
+
+            close(epoll_fd);
 
             return ret;
         }
@@ -1047,6 +1048,8 @@ public:
         }
   
 
+        //
+        // Do things following your role!
         bool doExchange() {
 
             if (getPlayerServer().node_id == this_node_idx)

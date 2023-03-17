@@ -109,7 +109,7 @@ namespace hartebeest {
                 pd_list.at(getIdx(arg_pd_name)).get(),
                 arg_addr, 
                 arg_len,
-                static_cast<int>(arg_rights));
+                arg_rights);
             ;
         }
     };
