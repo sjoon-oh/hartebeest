@@ -67,31 +67,14 @@ namespace hartebeest {
         std::vector<del_unique_ptr<struct ibv_qp>>  qp_list{};
 
         // Fixed vars.
-        const int                   cq_depth = 128;
-
-        struct ibv_qp_init_attr     common_init_attr;
-        const int                   qp_wr_depth = 128;
-        const int                   qp_sge_depth = 16;
-        const int                   qp_max_inlining = 256;
+        const int       default_cq_depth = 128;
+        const int       default_qp_wr_depth = 128;
+        const int       default_qp_sge_depth = 16;
+        const int       default_qp_max_inlining = 256;
 
     public:
-        QueueManager() {
-
-            // The intiial attribute of a queue pair is predefined here,
-            //  but may be updated in a program execution. 
-            //  Never trust these values.
-
-            common_init_attr.qp_type            = IBV_QPT_RC;
-            common_init_attr.cap.max_send_wr    = qp_wr_depth;
-            common_init_attr.cap.max_recv_wr    = qp_wr_depth;
-            common_init_attr.cap.max_send_sge   = qp_sge_depth;
-            common_init_attr.cap.max_recv_sge   = qp_sge_depth;
-            common_init_attr.cap.max_inline_data = qp_max_inlining;
-        }
-
-        ~QueueManager() {
-            // std::cout << "~QueueManager\n";
-        }
+        QueueManager() { }
+        ~QueueManager() { }
 
         //
         // The inteface naming convention is designed to have:
@@ -149,20 +132,14 @@ namespace hartebeest {
                 return false;
             
             // Creates CQ.
-            auto cq = ibv_create_cq(
-                arg_ctx, 
-                cq_depth, 
-                nullptr,   
-                nullptr, 
-                0);
+            auto cq = ibv_create_cq(arg_ctx, default_cq_depth, nullptr, nullptr, 0);
 
             if (cq == nullptr) return false;
 
             del_unique_ptr<struct ibv_cq> uniq_cq(cq, [](struct ibv_cq *arg_cq) {
                 auto ret = ibv_destroy_cq(arg_cq);
-                if (ret != 0) {
+                if (ret != 0) ;
                     // Do nothing, for now.
-                }
             });
 
             //
@@ -177,13 +154,15 @@ namespace hartebeest {
         }
 
 
-        bool doCreateAndRegisterQp(
-                std::string arg_qp_name, 
-                struct ibv_pd* arg_pd,
-                std::string arg_send_cq_name,
-                std::string arg_recv_cq_name
+        bool doCreateAndRegisterRcQp(
+                std::string     arg_qp_name, 
+                struct ibv_pd*  arg_pd,
+                std::string     arg_send_cq_name,
+                std::string     arg_recv_cq_name
             ) {
             
+            struct ibv_qp_init_attr iq;
+
             //
             // Verifications.
             //  Should not be already registered.
@@ -194,19 +173,27 @@ namespace hartebeest {
             if (!isCqRegistered(arg_send_cq_name)) return false;
             if (!isCqRegistered(arg_recv_cq_name)) return false;
 
-            common_init_attr.send_cq = getCq(arg_send_cq_name);
-            common_init_attr.recv_cq = getCq(arg_recv_cq_name);
+            std::memset(&iq, 0, sizeof(iq));
+
+            iq.qp_type                  = IBV_QPT_RC;
+            iq.cap.max_send_wr          = default_qp_wr_depth;
+            iq.cap.max_recv_wr          = default_qp_wr_depth;
+            iq.cap.max_send_sge         = default_qp_sge_depth;
+            iq.cap.max_recv_sge         = default_qp_sge_depth;
+            iq.cap.max_inline_data      = default_qp_max_inlining;
+
+            iq.send_cq                  = getCq(arg_send_cq_name);
+            iq.recv_cq                  = getCq(arg_recv_cq_name);
 
             //
             // Creates Queue Pair.
-            auto qp = ibv_create_qp(arg_pd, &common_init_attr);
+            auto qp = ibv_create_qp(arg_pd, &iq);
             if (qp == nullptr) return false;
 
             auto uniq_qp = del_unique_ptr<struct ibv_qp>(qp, [](struct ibv_qp* arg_qp) {
                     auto ret = ibv_destroy_qp(arg_qp);
-                    if (ret != 0) {
+                    if (ret != 0) ;
                         // Nothing, for now.
-                    }
             });
 
             int idx = qp_list.size();
@@ -231,11 +218,7 @@ namespace hartebeest {
             attr.qp_state = IBV_QPS_RESET;
 
             // Turn!
-            auto ret = ibv_modify_qp(
-                qp_list.at(getQpIdx(arg_qp_name)).get(), 
-                &attr, 
-                IBV_QP_STATE
-                );
+            auto ret = ibv_modify_qp(qp_list.at(getQpIdx(arg_qp_name)).get(), &attr, IBV_QP_STATE);
 
             if (ret != 0)
                 return false;
@@ -269,17 +252,17 @@ namespace hartebeest {
         }
 
         bool doConnectRemoteRcQp(
-            std::string arg_qp_name,
-            int arg_remote_port_id,
-            uint32_t arg_remote_qpn,
-            uint16_t arg_remote_lid
+            std::string     arg_qp_name,
+            int             arg_remote_port_id,
+            uint32_t        arg_remote_qpn,
+            uint16_t        arg_remote_lid
         ) {
             struct ibv_qp_attr connect_attr;
             memset(&connect_attr, 0, sizeof(struct ibv_qp_attr));
 
-            connect_attr.qp_state   = IBV_QPS_RTR;
-            connect_attr.path_mtu   = IBV_MTU_4096;
-            connect_attr.rq_psn     = 3185;
+            connect_attr.qp_state           = IBV_QPS_RTR;
+            connect_attr.path_mtu           = IBV_MTU_4096;
+            connect_attr.rq_psn             = 3185;
 
             connect_attr.ah_attr.is_global  = 0;
             connect_attr.ah_attr.sl         = 0;
@@ -296,33 +279,23 @@ namespace hartebeest {
                 IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
                 IBV_QP_MIN_RNR_TIMER;
 
-            auto ret = ibv_modify_qp(
-                getQp(arg_qp_name),
-                &connect_attr,
-                rtr_flags
-            );
-
+            auto ret = ibv_modify_qp(getQp(arg_qp_name), &connect_attr, rtr_flags);
             if (ret != 0) return false;
 
             memset(&connect_attr, 0, sizeof(struct ibv_qp_attr));
             connect_attr.qp_state   = IBV_QPS_RTS;
             connect_attr.sq_psn     = 3185;
 
-            connect_attr.timeout    = 14;
-            connect_attr.retry_cnt  = 7;
-            connect_attr.rnr_retry  = 7;
+            connect_attr.timeout        = 14;
+            connect_attr.retry_cnt      = 7;
+            connect_attr.rnr_retry      = 7;
             connect_attr.max_rd_atomic      = 16;
             connect_attr.max_dest_rd_atomic = 16;
 
             int rts_flags = IBV_QP_STATE | IBV_QP_SQ_PSN | IBV_QP_TIMEOUT |
                   IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_MAX_QP_RD_ATOMIC;
 
-            ret = ibv_modify_qp(
-                getQp(arg_qp_name),
-                &connect_attr,
-                rts_flags
-            );
-
+            ret = ibv_modify_qp(getQp(arg_qp_name), &connect_attr, rts_flags);
             if (ret != 0) return false;
 
             return true;

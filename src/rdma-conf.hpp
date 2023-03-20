@@ -71,12 +71,12 @@ namespace hartebeest {
 
         //
         // Creation/Deletion/Linker
-        std::unique_ptr<DeviceManager>  dev_manager;    // Device Management
+        std::unique_ptr<DeviceManager>  dv_manager;     // Device Management
         std::unique_ptr<MrManager>      mr_manager;     // Memory Management
         std::unique_ptr<QueueManager>   qs_manager;     // Queue Management
         std::unique_ptr<PdManager>      pd_manager;     // Protection Domain Management
 
-        // All IB resources are associated to the RDMA context the dev_manager handles.
+        // All IB resources are associated to the RDMA context the dv_manager handles.
 
         //
         // Metadata Management.
@@ -95,7 +95,7 @@ namespace hartebeest {
     public:
         RdmaConfigurator() : dev_init(false) {
             
-            dev_manager.reset(new DeviceManager());
+            dv_manager.reset(new DeviceManager());
             mr_manager.reset(new MrManager());
             qs_manager.reset(new QueueManager());
             pd_manager.reset(new PdManager());
@@ -105,14 +105,14 @@ namespace hartebeest {
             mr_manager.release();
             qs_manager.release();
             pd_manager.release();
-            dev_manager.release();
+            dv_manager.release();
 
             // Resource release order matters. 
             // May change, but it is not recommended.
             // Do it at your own risk.
         }
 
-        DeviceManager&  getDeviceManager() { return *dev_manager.get(); }
+        DeviceManager&  getDeviceManager() { return *dv_manager.get(); }
         MrManager&      getMrManager() { return *mr_manager.get(); }
         QueueManager&   getQManager() { return *qs_manager.get(); }
         PdManager&      getPdManager() { return *pd_manager.get(); }
@@ -167,13 +167,11 @@ namespace hartebeest {
             else return std::string("");
         }
 
-
         inline int getAssociatedHcaIdxFromCq(std::string arg_cq_name) {
             if (isCqAssociated(arg_cq_name))
                 return cq_ctx_regbook.find(arg_cq_name)->second;
             else return int{-1};
         }
-
 
         //
         // Here I provide call interface sequence. 
@@ -194,9 +192,9 @@ namespace hartebeest {
             const int dev_idx = 0;
             
             if (!dev_init) {
-                ret = dev_manager->doGetDevice();
-                ret = dev_manager->doOpenDevice(dev_id);
-                ret = dev_manager->doPortBind(dev_id, dev_idx);
+                ret = dv_manager->doGetDevice();
+                ret = dv_manager->doOpenDevice(dev_id);
+                ret = dv_manager->doPortBind(dev_id, dev_idx);
             }
 
             dev_init = true;
@@ -209,7 +207,7 @@ namespace hartebeest {
         //  Device initialization must be done beforehand. 
         //  Creates a protection domain. 
         bool doRegisterPd(std::string arg_pd_name) {
-            return pd_manager->doRegisterPd(arg_pd_name, dev_manager->getHcaDevice());
+            return pd_manager->doRegisterPd(arg_pd_name, dv_manager->getHcaDevice());
         }
         
         //
@@ -264,7 +262,7 @@ namespace hartebeest {
             return
                 qs_manager->doRegisterCq(
                     arg_cq_name, 
-                    dev_manager->getHcaDevice().getContext());
+                    dv_manager->getHcaDevice().getContext());
         }
 
         //
@@ -272,7 +270,7 @@ namespace hartebeest {
         //  Creates Queue Pair with arg_qp_name and register to PD of arg_pd_name.
         //  Send queue and receive queue (CQs) must be generated beforehand.
         //  The CQs only in this RdmaConfigurator instance can be registered.
-        bool doCreateAndRegisterQp(
+        bool doCreateAndRegisterRcQp(
             std::string arg_pd_name,
             std::string arg_qp_name,
             std::string arg_send_cq_name,
@@ -283,7 +281,7 @@ namespace hartebeest {
             qp_pd_regbook.insert(std::pair<std::string, std::string>(arg_qp_name, arg_pd_name));
 
             return
-                qs_manager->doCreateAndRegisterQp(
+                qs_manager->doCreateAndRegisterRcQp(
                     arg_qp_name,
                     pd_manager->getPd(arg_pd_name),
                     arg_send_cq_name,
@@ -300,7 +298,7 @@ namespace hartebeest {
             return
                 qs_manager->doInitQp(
                     arg_qp_name, 
-                    dev_manager->getHcaDevice().getPortId()
+                    dv_manager->getHcaDevice().getPortId()
                     );
         }
 
@@ -330,8 +328,8 @@ namespace hartebeest {
                         {"qp_name", qp_name},
                         {"pd_name", pd_name},
                         {"qpn", qs_manager->getQp(qp_name)->qp_num},
-                        {"pid", dev_manager->getHcaDevice().getPortId()},
-                        {"plid", dev_manager->getHcaDevice().getPortLid()}
+                        {"pid", dv_manager->getHcaDevice().getPortId()},
+                        {"plid", dv_manager->getHcaDevice().getPortLid()}
                     }
                 );
             }
@@ -378,7 +376,8 @@ namespace hartebeest {
                 );
         }
 
-        bool doPostRdmaWrite(
+        bool doPost(
+            ibv_wr_opcode   arg_opcode,
             std::string     arg_qp_name,
             uintptr_t       arg_buf, 
             uint32_t        arg_len, 
@@ -395,8 +394,8 @@ namespace hartebeest {
 
             struct ibv_qp* target_qp = qs_manager->getQp(arg_qp_name);
 
-            memset(&sg_elem, 0, sizeof(sg_elem));
-            memset(&work_req, 0, sizeof(work_req));
+            std::memset(&sg_elem, 0, sizeof(sg_elem));
+            std::memset(&work_req, 0, sizeof(work_req));
 
             sg_elem.addr        = arg_buf;
             sg_elem.length      = arg_len;
@@ -404,7 +403,7 @@ namespace hartebeest {
 
             work_req.wr_id      = 0;
             work_req.num_sge    = 1;
-            work_req.opcode     = IBV_WR_RDMA_WRITE;
+            work_req.opcode     = arg_opcode;
             work_req.send_flags = IBV_SEND_SIGNALED;
             work_req.wr_id      = 0;
             work_req.sg_list    = &sg_elem;
@@ -415,15 +414,33 @@ namespace hartebeest {
 
             ret = ibv_post_send(target_qp , &work_req, &bad_work_req);
             
-            if (bad_work_req != nullptr) {
-                return false;
-            }
-
-            if (ret != 0) {
-                return false;
-            }
+            if (bad_work_req != nullptr) return false;
+            if (ret != 0) return false;
 
             return true;
+        }
+
+        
+        bool doRdmaWrite(
+            std::string     arg_qp_name,
+            uintptr_t       arg_buf, 
+            uint32_t        arg_len, 
+            uint32_t        arg_lk,
+            uintptr_t       arg_remote_addr,
+            uint32_t        arg_remote_rk
+        ) {
+            return doPost(IBV_WR_RDMA_WRITE, arg_qp_name, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
+        }
+
+        bool doRdmaRead(
+            std::string     arg_qp_name,
+            uintptr_t       arg_buf, 
+            uint32_t        arg_len, 
+            uint32_t        arg_lk,
+            uintptr_t       arg_remote_addr,
+            uint32_t        arg_remote_rk
+        ) {
+            return doPost(IBV_WR_RDMA_READ, arg_qp_name, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
         }
 
 
@@ -560,15 +577,8 @@ namespace hartebeest {
 
         int                         this_node_idx;  // This node's index
         std::vector<struct Node>    players;        // Node infos of participants
+        int                         port;
 
-        //
-        // Comm Related
-        bool            epoll_init_flag;
-        int             epoll_fd;
-
-        int             port;
-        int             sock_listen_fd;
-        int             sock_conn_fd;
         
         //
         // Methods for insiders.
@@ -643,8 +653,7 @@ namespace hartebeest {
             // 
             // Now, let's start.
             // Resource alloc.
-            if (this_node.role != ROLE_SERVER)
-                return ret;
+            if (this_node.role != ROLE_SERVER) return ret;  // Role check.
 
             else {
                 buf = new char[BUFFER_SIZE];
@@ -654,7 +663,6 @@ namespace hartebeest {
             // Socket step 1: Generate a socket.
             if ((sock_listen_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) goto exit_srv;
             setsockopt(sock_listen_fd, SOL_SOCKET, SO_REUSEADDR ,(char *)&bsize, sizeof(bsize));
-            // fcntl(socket, F_SETFL, O_NONBLOCK);
 
             // Socket step 2: Bind() to address.
             if (bind(sock_listen_fd, (struct sockaddr*)&sockaddr_info, sizeof(sockaddr_info)) == -1) goto exit_srv;
@@ -662,51 +670,76 @@ namespace hartebeest {
             // Socket step 3. Initiate LISTEN
             if (listen(sock_listen_fd, MAX_CLIENT) == -1) goto exit_srv;
 
+            // step 4: Prepare epoll
             if ((epoll_fd = epoll_create(512)) < 0) goto exit_srv;
             
-            ev.events = EPOLLIN;
-            ev.data.fd = sock_listen_fd;
+            ev.events   = EPOLLIN;
+            ev.data.fd  = sock_listen_fd; // Set event to this listen_fd.
 
             if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_listen_fd, &ev) == -1) goto exit_srv;
 
-            this_node.state = STATE_FILLED;
+            this_node.state = STATE_FILLED; 
+                // Server is already filled,
+                // Since it has its own RDMA infos. 
+                // STATE_FILLED indicates that the RDMA info of a node is prepared (received).
+                //  (..in the vector player. )
 
             //
             // Phase 1. Receive all of the Queue Pair information from each node. 
             // This phase blocks until it receives all the infos.
             while (!isEveryoneInState(STATE_FILLED)) {
-
+                
                 event_num = epoll_wait(epoll_fd, events, MAX_CLIENT, -1); 
                 if (event_num == -1) goto exit_srv;
 
                 for (int i = 0; i < event_num; i++) {
                     if (events[i].data.fd == sock_listen_fd) {
+                        // Case, when a node first connects to this server node.
+
                         sock_client_fd = accept(sock_listen_fd, (struct sockaddr *)&client_sockaddr, &client_socklen);
                         
-                        memset(buf, 0, sizeof(char) * BUFFER_SIZE);
-                        recv_sz = read(sock_client_fd, buf, BUFFER_SIZE);
+                        std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
+                        recv_sz = read(sock_client_fd, buf, BUFFER_SIZE);   
+
+                        //
+                        // At the first conection, client node sends its node ID as a "hello".
+                        // There is no Byzntine players here, thus server believes that the value is not faked.
+                        // Node ID is assigned by each node's configuration file, thus make sure to 
+                        // set the correct one. 
 
                         if (recv_sz  == -1) goto exit_srv;
 
-                        player_idx = getPlayerIdx(*(int*)buf);
+                        player_idx = getPlayerIdx(*(int*)buf);  // "hello", your node ID is recognized.
 
                         players.at(player_idx).buf = new char[BUFFER_SIZE];
                         players.at(player_idx).recv_sz = 0;
-                        players.at(player_idx).fd = sock_client_fd;
+                        players.at(player_idx).fd = sock_client_fd;     // OK, you are acked.
 
-                        memset(players.at(player_idx).buf, 0, sizeof(char) * BUFFER_SIZE);
+                        std::memset(players.at(player_idx).buf, 0, sizeof(char) * BUFFER_SIZE);
                         
-                        ev.events = EPOLLIN;
-                        ev.data.fd = sock_client_fd;
+                        ev.events   = EPOLLIN;
+                        ev.data.fd  = sock_client_fd; 
+                            // If any further request comes, it will be distinguished by its fd.
 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_client_fd, &ev) == -1) goto exit_srv;
                     }
                     else {  // I've seen this fd before!
                         for (auto& member: players) {
                             if (events[i].data.fd == member.fd) {
+                                
+                                // Sever has seen this client node before. 
+                                // In this scope, it reads JSON data from the client that contains only its RDMA QP/MR context. 
 
                                 recv_sz = read(sock_client_fd, member.buf + member.recv_sz, BUFFER_SIZE - member.recv_sz);
                                 member.recv_sz += recv_sz;
+
+                                // After executing a single read, further data may remain. 
+                                // Client will continue writing to the socket, while some are finished or in progress.
+                                // Server records the received byte to the players vector, and directly calls __recordSingleConf.
+                                // __recordSingleConf throws an exception (by nlohmann::json::parse) and 
+                                // return false if the string cannot be paresed. 
+                                // If it is the case, the member is not recorded as STATE_FILLED. Unfilled member continues to
+                                // be recorded (appended) the JSON data by read() in this scope.
 
                                 if (recv_sz == -1) goto exit_srv;
                                 if (__recordSingleConf(member.buf, client_sockaddr, sock_client_fd) == false)
@@ -717,14 +750,17 @@ namespace hartebeest {
                 }
             }
 
+            // STATE_DISTRIBUTED implies that the client has all the information of RDMA MR/QPs in
+            // the target network. In this state, the client may be dismissed.
+
             __gatherAllConfs();     // Generates single post configuration file in pre_conf member.
             __exportAllConfs();     // Export as a file.
 
             this_node.state = STATE_DISTRIBUTED;
 
             send_sz = post_conf.dump().size();
-            memset(buf, 0, sizeof(char) * BUFFER_SIZE);
-            memcpy(buf, post_conf.dump().c_str(), send_sz);
+            std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
+            std::memcpy(buf, post_conf.dump().c_str(), send_sz);
 
             while (!isEveryoneInState(STATE_DISTRIBUTED)) {
                 
@@ -734,13 +770,10 @@ namespace hartebeest {
 
                     // The ConfigFileExchanger does not assume the config file to be extremely large. 
                     // The size of the file must be reasonaly set.
-                    // Thus, the function do not execute multiple sends (as data partitions).
-                    // If your configuration file must be huge, modify the part that uses the write(), and read() function.
                     
                     offset = 0;
-                    while (send_sz > offset) {   
+                    while (send_sz > offset)
                         offset += write(member.fd, buf + offset, send_sz - offset);
-                    }
 
                     member.state = STATE_DISTRIBUTED;
                     close(member.fd);
@@ -777,11 +810,11 @@ exit_srv:
 
             std::string this_node_dump;
 
+            // Role check.
             if (this_node.role != ROLE_CLIENT || server_node.role != ROLE_SERVER)
                 return ret;
 
-            else
-                buf = new char[BUFFER_SIZE];
+            else buf = new char[BUFFER_SIZE];
             
             struct sockaddr_in serv_sockaddr_info = server_node.sockaddr_info;
 
@@ -789,32 +822,29 @@ exit_srv:
                 goto exit_cli;
 
             // Retry
-            while (connect(
-                    sock_conn_fd,
-                    (struct sockaddr *)&serv_sockaddr_info, 
-                    sizeof(serv_sockaddr_info)
-                ) == -1)
+            while (connect(sock_conn_fd, (struct sockaddr *)&serv_sockaddr_info, sizeof(serv_sockaddr_info)) 
+                == -1)
                 sleep(1);
 
             // Notify this node.
             // Simple!
             write(sock_conn_fd, &this_node_id, sizeof(this_node_id));
+                // It is a simple 4-byte write. The client do not assume to be failed.
 
             this_node_dump = getThisNodeRdmaInfo().dump();
 
             // Send My Info
-            memset(buf, 0, sizeof(char) * BUFFER_SIZE);
-            memcpy(buf, this_node_dump.c_str(), this_node_dump.size());
+            std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
+            std::memcpy(buf, this_node_dump.c_str(), this_node_dump.size());
             
             send_sz = this_node_dump.size();
 
-            while (send_sz > offset) {   
+            while (send_sz > offset)
                 offset += write(sock_conn_fd, buf + offset, send_sz - offset);
-            }
 
             // Receive All infos.
             offset = 0;
-            memset(buf, 0, sizeof(char) * BUFFER_SIZE);
+            std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
 
             while (recv_sz > 0) {
                 recv_sz = read(sock_conn_fd, buf + offset, BUFFER_SIZE - offset);
@@ -838,8 +868,7 @@ exit_cli:
 
     public:
         ConfigFileExchanger() : 
-            this_node_idx(-1),
-            epoll_init_flag(false) {
+            this_node_idx(-1) {
                 
             }
         ~ConfigFileExchanger() {}
@@ -1024,7 +1053,7 @@ public:
                     participant.at("ip").get_to(member.addr_str);
 
                     // Socket related (Revive)                
-                    memset(&member.sockaddr_info, 0, sizeof(struct sockaddr_in));
+                    std::memset(&member.sockaddr_info, 0, sizeof(struct sockaddr_in));
                     member.sockaddr_info.sin_family = AF_INET;
                     member.sockaddr_info.sin_port = htons(port);
 
