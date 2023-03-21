@@ -28,6 +28,16 @@
 // A Protection Domain controls multiple PDs.
 namespace hartebeest {
 
+    // PDM Return codes.
+    // This class do not use throws.
+    enum {
+        PDM_NOERROR = 0,
+        PDM_ERROR_GENERAL = 0x20,
+        PDM_ERROR_KEY_EXIST,
+        PDM_ERROR_PD_REGISTER,
+        PDM_ERRROR_NULL_CONTEXT
+    };
+
     class PdManager {
     private:
 
@@ -39,12 +49,13 @@ namespace hartebeest {
         //
         // A user can distinguish multiple PDs with its name.
 
-        std::map<std::string, size_t>       pdinfo_map; // <index>
-        std::vector<del_unique_ptr<struct ibv_pd>>       pd_list{};
+        std::map<uint32_t, struct ibv_pd*>  dbm;   // DB map.
 
     public:
         PdManager() {}
-        ~PdManager() {}
+        ~PdManager() {
+            for (auto& elem: dbm) ibv_dealloc_pd(elem.second);
+        }
 
         //
         // The inteface naming convention is designed to have:
@@ -54,63 +65,45 @@ namespace hartebeest {
         //  - get** : Returns reference/value of a member. 
         //
         //  Members follow the underscore, methods follow the CamelCase naming convention.
-        bool isPdRegistered(std::string arg_pd_name) {
-            if (pdinfo_map.find(arg_pd_name) != pdinfo_map.end())
+        bool isPdRegistered2(uint32_t arg_pd_id) {
+            if (dbm.find(arg_pd_id) != dbm.end()) 
                 return true;
             return false;
         }
 
-        size_t getIdx(std::string arg_pd_name) {
-            return pdinfo_map.find(arg_pd_name)->second;
+        struct ibv_pd* getPd2(uint32_t arg_pd_id) {
+            if (!isPdRegistered2(arg_pd_id)) 
+                return nullptr;
+            return dbm.find(arg_pd_id)->second;
         }
 
-        struct ibv_pd* getPd(std::string arg_pd_name) {
-            int idx = getIdx(arg_pd_name);
-            return pd_list.at(idx).get();
-        }      
+        std::map<uint32_t, struct ibv_pd*>& getPdMap() {
+            return dbm;
+        }
 
         //
         // All of the core interface starts with prefix 'do'.
         // doRegisterPd does the following:
         //  - Creates unique_ptr with a deleter that allocates ibv_pd (aligned).
         //  - Registers to management container, pd_list and pdinfo_map.
-        //
-        bool doRegisterPd(std::string arg_pd_name, HcaDevice& arg_opened_dev) {
-            if (isPdRegistered(arg_pd_name))
-                return false;
+
+        int doRegisterPd2(uint32_t arg_pd_id, HcaDevice& arg_opened_dev) {
+            if (isPdRegistered2(arg_pd_id))
+                return PDM_ERROR_KEY_EXIST;
 
             struct ibv_pd* pd = ibv_alloc_pd(arg_opened_dev.getContext());
-            if (pd == nullptr) return false;
+            if (pd == nullptr) 
+                return PDM_ERRROR_NULL_CONTEXT;
 
-            del_unique_ptr<struct ibv_pd> uniq_pd(pd, [](struct ibv_pd* arg_pd) {
-
-                auto ret = ibv_dealloc_pd(arg_pd);
-                if (ret != 0) 
-                    ; // Undefined yet, but is an error.
-            });
-
-            //
-            // Preventing over/underflow.
-            // Corner case exists in Mu.
-            int idx = pd_list.size();
-
-            pd_list.push_back(std::move(uniq_pd));
-            pdinfo_map.insert(std::pair<std::string, size_t>(arg_pd_name, idx));
-            // Map: <K, V> = <"Name", index_val>
-
-            return true;
+            dbm.insert(std::pair<uint32_t, struct ibv_pd*>(arg_pd_id, pd));
+            return PDM_NOERROR;
         }
 
-        struct ibv_mr* doCreateMr(std::string arg_pd_name, void* arg_addr, size_t arg_len, int arg_rights) {
-            if (!isPdRegistered(arg_pd_name))
+        struct ibv_mr* doCreateMr2(uint32_t arg_pd_id, void* arg_addr, size_t arg_len, int arg_rights) {
+            if (!isPdRegistered2(arg_pd_id))
                 return nullptr;
 
-            return ibv_reg_mr(
-                pd_list.at(getIdx(arg_pd_name)).get(),
-                arg_addr, 
-                arg_len,
-                arg_rights);
-            ;
+            return ibv_reg_mr(getPd2(arg_pd_id), arg_addr, arg_len, arg_rights);
         }
     };
 

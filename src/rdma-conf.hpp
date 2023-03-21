@@ -37,9 +37,17 @@
 
 #include "file-conf.hpp"
 
+#ifdef LOG_ENABLED
+#include "spdlog/spdlog.h"
+#endif
 
 namespace hartebeest {
-    
+
+    enum {
+        CONFR_NOERROR = 0,
+        CONFR_ERROR_GENERAL = 0x10,
+    };
+
     /*
      * Class RdmaConfigurator (Temporary Class Name)
      * 
@@ -71,22 +79,10 @@ namespace hartebeest {
 
         //
         // Creation/Deletion/Linker
-        std::unique_ptr<DeviceManager>  dv_manager;     // Device Management
-        std::unique_ptr<MrManager>      mr_manager;     // Memory Management
-        std::unique_ptr<QueueManager>   qs_manager;     // Queue Management
-        std::unique_ptr<PdManager>      pd_manager;     // Protection Domain Management
-
-        // All IB resources are associated to the RDMA context the dv_manager handles.
-
-        //
-        // Metadata Management.
-        // Records what resource(key) is associated to which Protection Domain.
-        // <K, V> = <mr_name, pd_name>
-        // <K, V> = <qp_name, pd_name>
-        // <K, V> = <cq_name, hca_idx>
-        std::map<std::string, std::string>  mr_pd_regbook; 
-        std::map<std::string, std::string>  qp_pd_regbook;
-        std::map<std::string, int>          cq_ctx_regbook;
+        DeviceManager       dv_mgr;     // Device Management
+        MrManager           mr_mgr;     // Memory Management
+        QueueManager        qs_mgr;     // Queue Management
+        PdManager           pd_mgr;     // Protection Domain Management
 
         // Work Requests lists
         std::map<std::string, std::vector<struct ibv_wc>>
@@ -94,28 +90,11 @@ namespace hartebeest {
 
     public:
         RdmaConfigurator() : dev_init(false) {
-            
-            dv_manager.reset(new DeviceManager());
-            mr_manager.reset(new MrManager());
-            qs_manager.reset(new QueueManager());
-            pd_manager.reset(new PdManager());
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] RdmaConfigurator instance initiated.");
+#endif
         }
-        ~RdmaConfigurator() {
-
-            mr_manager.release();
-            qs_manager.release();
-            pd_manager.release();
-            dv_manager.release();
-
-            // Resource release order matters. 
-            // May change, but it is not recommended.
-            // Do it at your own risk.
-        }
-
-        DeviceManager&  getDeviceManager() { return *dv_manager.get(); }
-        MrManager&      getMrManager() { return *mr_manager.get(); }
-        QueueManager&   getQManager() { return *qs_manager.get(); }
-        PdManager&      getPdManager() { return *pd_manager.get(); }
+        ~RdmaConfigurator() { }
         
         //
         // The inteface naming convention is designed to have:
@@ -125,52 +104,17 @@ namespace hartebeest {
         //  - get** : Returns reference/value of a member. 
         //
         //  Members follow the underscore, methods follow the CamelCase naming convention.
-        inline bool isPdRegistered(std::string arg_pd_name) {
-            return pd_manager->isPdRegistered(arg_pd_name);
+
+        inline bool isPdRegistered2(uint32_t arg_pd_id) {
+            return pd_mgr.isPdRegistered2(arg_pd_id);
         }
 
-        inline bool isBufferAllocated(std::string arg_buf_name) {
-            return mr_manager->isBufferAllocated(arg_buf_name);
-        }
-        
-        inline bool isMrRegistered(std::string arg_mr_name) {
-            return mr_manager->isMrRegistered(arg_mr_name);
+        inline bool isMrRegistered2(uint32_t arg_mr_id) {
+            return mr_mgr.isMrRegistered2(arg_mr_id);
         }
 
-        inline bool isMrAssociated(std::string arg_mr_name) {
-            if (mr_pd_regbook.find(arg_mr_name) != mr_pd_regbook.end())
-                return true;
-            return false;
-        }
-
-        inline bool isQpAssociated(std::string arg_qp_name) {
-            if (qp_pd_regbook.find(arg_qp_name) != qp_pd_regbook.end())
-                return true;
-            return false;
-        }
-
-        inline bool isCqAssociated(std::string arg_cq_name) {
-            if (cq_ctx_regbook.find(arg_cq_name) != cq_ctx_regbook.end())
-                return true;
-            return false;
-        }
-
-        inline std::string getAssociatedPdFromMr(std::string arg_mr_name) {
-            if (isMrAssociated(arg_mr_name))
-                return mr_pd_regbook.find(arg_mr_name)->second;
-            else return std::string("");
-        }
-
-        inline std::string getAssociatedPdFromQp(std::string arg_qp_name) {
-            if (isQpAssociated(arg_qp_name))
-                return qp_pd_regbook.find(arg_qp_name)->second;
-            else return std::string("");
-        }
-
-        inline int getAssociatedHcaIdxFromCq(std::string arg_cq_name) {
-            if (isCqAssociated(arg_cq_name))
-                return cq_ctx_regbook.find(arg_cq_name)->second;
-            else return int{-1};
+        inline struct ibv_mr* getMr(uint32_t arg_mr_id) {
+            return mr_mgr.getMr2(arg_mr_id);
         }
 
         //
@@ -184,7 +128,7 @@ namespace hartebeest {
         // <Call Sequence 0>
         //  Initializes HCA device, using its device manager (dev_mmanager).
         //  Do not call multiple times.
-        bool doInitDevice() {
+        int doInitDevice2() {
             
             bool ret = true;
 
@@ -192,77 +136,55 @@ namespace hartebeest {
             const int dev_idx = 0;
             
             if (!dev_init) {
-                ret = dv_manager->doGetDevice();
-                ret = dv_manager->doOpenDevice(dev_id);
-                ret = dv_manager->doPortBind(dev_id, dev_idx);
+                ret = dv_mgr.doGetDevice();
+                ret = dv_mgr.doOpenDevice(dev_id);
+                ret = dv_mgr.doPortBind(dev_id, dev_idx);
             }
 
             dev_init = true;
 
-            return ret;
+            if (!ret) return CONFR_ERROR_GENERAL;
+
+            return CONFR_NOERROR;
         }
         
         //
         // <Call Sequence 1>
         //  Device initialization must be done beforehand. 
-        //  Creates a protection domain. 
-        bool doRegisterPd(std::string arg_pd_name) {
-            return pd_manager->doRegisterPd(arg_pd_name, dv_manager->getHcaDevice());
+        //  Creates a protection domain.   
+        int doRegisterPd2(uint32_t arg_pd_id) {
+            return pd_mgr.doRegisterPd2(arg_pd_id, dv_mgr.getHcaDevice());
         }
-        
+
         //
         // <Call Sequence 2>
         //  Allocates a buffer. All buffers are managed by the MrManager instance.
-        bool doAllocateBuffer(std::string arg_buf_name, size_t arg_len, int arg_align) {
-            return mr_manager->doAllocateBuffer(arg_buf_name, arg_len, arg_align);
+        uint8_t* doAllocateBuffer2(size_t arg_len, int arg_align) {
+            return mr_mgr.doAllocateBuffer2(arg_len, arg_align);
         }
 
         //
         // <Call Sequence 3>
         //  Creates MR with arg_mr_name using existing buffer.
-        bool doCreateAndRegisterMr(std::string arg_pd_name, 
-            std::string arg_buf_name, std::string arg_mr_name) {
+        int doCreateAndRegisterMr2(uint32_t arg_pd_id, uint32_t arg_mr_id, uint8_t* buf, size_t arg_len) {
             
             // If arg_mr_name is associated to some PD, it cannot be registered.
-            if (isMrAssociated(arg_mr_name)) return false;
-            
-            void* addr = mr_manager->getBufferAddress(arg_buf_name);
-            size_t len = mr_manager->getBufferLen(arg_buf_name);
+            // if (isMrAssociated(arg_mr_name)) return false;
+            int rights = 0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 
             // Creates an MR.
-            struct ibv_mr* mr;
-            mr = pd_manager->doCreateMr(
-                arg_pd_name, 
-                addr, 
-                len, 
-                0 | IBV_ACCESS_LOCAL_WRITE | 
-                    IBV_ACCESS_REMOTE_READ | 
-                    IBV_ACCESS_REMOTE_WRITE
-            );
+            struct ibv_mr* mr = pd_mgr.doCreateMr2(arg_pd_id, buf, arg_len, rights);
+            if (mr == nullptr) 
+                return CONFR_ERROR_GENERAL;
 
-            if (mr == nullptr) return false;
-            
-            mr_pd_regbook.insert(std::pair<std::string, std::string>(arg_mr_name, arg_pd_name));
-
-            return mr_manager->doRegisterMr2(arg_mr_name, mr);
+            return mr_mgr.doRegisterMr22(arg_mr_id, mr);
         }
 
         //
         // <Call Sequence 4>
         //  Creates CQ using arg_cq_name. The CQ registered to the RDMA context (HCA).
-        bool doCreateAndRegisterCq(std::string arg_cq_name) {
-            
-            // If arg_mr_name is associated to some context, it cannot be registered.
-            if (isCqAssociated(arg_cq_name)) return false;
-            cq_ctx_regbook.insert(std::pair<std::string, int>(arg_cq_name, 0));
-            cq_watchp_list.insert(
-                std::pair<std::string, std::vector<struct ibv_wc>>(arg_cq_name, std::vector<struct ibv_wc>{})
-            );
-
-            return
-                qs_manager->doRegisterCq(
-                    arg_cq_name, 
-                    dv_manager->getHcaDevice().getContext());
+        int doCreateAndRegisterCq2(uint32_t arg_cq_id) {
+            return qs_mgr.doRegisterCq2(arg_cq_id, dv_mgr.getHcaDevice().getContext());
         }
 
         //
@@ -270,36 +192,23 @@ namespace hartebeest {
         //  Creates Queue Pair with arg_qp_name and register to PD of arg_pd_name.
         //  Send queue and receive queue (CQs) must be generated beforehand.
         //  The CQs only in this RdmaConfigurator instance can be registered.
-        bool doCreateAndRegisterRcQp(
-            std::string arg_pd_name,
-            std::string arg_qp_name,
-            std::string arg_send_cq_name,
-            std::string arg_recv_cq_name
+        int doCreateAndRegisterRcQp2(
+            uint32_t    arg_pd_id,
+            uint32_t    arg_qp_id,
+            uint32_t    arg_send_cq_id,
+            uint32_t    arg_recv_cq_id
         ) {
 
-            if (isQpAssociated(arg_qp_name)) return false;
-            qp_pd_regbook.insert(std::pair<std::string, std::string>(arg_qp_name, arg_pd_name));
-
-            return
-                qs_manager->doCreateAndRegisterRcQp(
-                    arg_qp_name,
-                    pd_manager->getPd(arg_pd_name),
-                    arg_send_cq_name,
-                    arg_recv_cq_name
-                );
+            return qs_mgr.doCreateAndRegisterRcQp2(
+                arg_qp_id, pd_mgr.getPd2(arg_pd_id), arg_send_cq_id, arg_recv_cq_id);
         }
 
         //
         // <Call Sequence 6>
         //  Queue pair stays in RESET state after the creation. 
         //  This method simply makes transition to INIT state.
-        bool doInitQp(std::string arg_qp_name, int arg_dev_idx = 0) {
-            
-            return
-                qs_manager->doInitQp(
-                    arg_qp_name, 
-                    dv_manager->getHcaDevice().getPortId()
-                    );
+        int doInitQp2(uint32_t arg_qp_id, int arg_dev_idx = 0) {
+            return qs_mgr.doInitQp2(arg_qp_id, dv_mgr.getHcaDevice(arg_dev_idx).getPortId());
         }
 
         //
@@ -308,77 +217,68 @@ namespace hartebeest {
         //  JSON file. The header-only JSON parser library for C++ (https://github.com/nlohmann/json) 
         //  is used in this function. 
         //  Check the source in the "extern" directory.
-        bool doExportAll(int arg_my_node_id, std::string arg_export_path = RDMA_MY_CONF_PATH) {
+        int doExportAll2(int arg_my_node_id, std::string arg_export_path = RDMA_MY_CONF_PATH) {
 
             nlohmann::json export_obj;
-            
-            export_obj["nid"] = arg_my_node_id;
-            export_obj["qps"] = nlohmann::json::array();
-            export_obj["mrs"] = nlohmann::json::array();
 
-            //
-            // First, export all qps
-            for (const auto& elem : qp_pd_regbook) {
-                
-                std::string qp_name{elem.first};
-                std::string pd_name{elem.second};
+            export_obj["n"] = arg_my_node_id;           // "n": Node ID
+            export_obj["p"] = nlohmann::json::array();  // "c": RDMA Context
 
-                export_obj["qps"].push_back(
-                    {
-                        {"qp_name", qp_name},
-                        {"pd_name", pd_name},
-                        {"qpn", qs_manager->getQp(qp_name)->qp_num},
-                        {"pid", dv_manager->getHcaDevice().getPortId()},
-                        {"plid", dv_manager->getHcaDevice().getPortLid()}
+            for (auto& pd: pd_mgr.getPdMap()) {
+
+                nlohmann::json sub_obj;
+
+                sub_obj["i"] = pd.first;                    // "p": PD ID
+                sub_obj["m"] = nlohmann::json::array();     // "m": MRs
+                sub_obj["q"] = nlohmann::json::array();     // "q": QPs
+
+                for (auto& mr: mr_mgr.getMrMap()) {
+                    if (mr.second->pd == pd.second) {
+                        sub_obj["m"].push_back(
+                            {{"i", mr.first},
+                                {"a", (uintptr_t)mr.second->addr},
+                                {"s", mr.second->length},
+                                {"r", mr.second->rkey}}); 
                     }
-                );
+                }
+
+                for (auto& qp: qs_mgr.getQpMap()) {
+                    if (qp.second->pd == pd.second) {
+                        sub_obj["q"].push_back(
+                            {{"i", qp.first},
+                                {"q", qp.second->qp_num},
+                                {"p", dv_mgr.getHcaDevice().getPortId()},
+                                {"l", dv_mgr.getHcaDevice().getPortLid()}});
+                    }
+                }
+                
+                export_obj["p"].push_back(sub_obj);
+                sub_obj.clear();
             }
 
-            //
-            // First, export all mrs
-            for (const auto& elem : mr_pd_regbook) {
-                
-                std::string mr_name{elem.first};
-                std::string pd_name{elem.second};
-
-                export_obj["mrs"].push_back(
-                    {
-                        {"mr_name", mr_name},
-                        {"pd_name", pd_name},
-                        {"addr", (uintptr_t)(mr_manager->getMrAddr(mr_name))},
-                        {"lk", mr_manager->getMrLocalKey(mr_name)},
-                        {"rk", mr_manager->getMrRemoteKey(mr_name)}
-                    }
-                );
-            }
-
-            if (arg_export_path == "")
+            if (arg_export_path == "")  
                 arg_export_path = RDMA_MY_CONF_PATH;
 
             std::ofstream export_out{arg_export_path};
             export_out << std::setw(4) << export_obj << std::endl;
-
-            return true;
+            
+            return CONFR_NOERROR;
         }
 
         //
         // <Call Sequence 8>
-        //  
-        bool doConnectRcQp(
-            std::string     arg_qp_name,
+        int doConnectRcQp2(
+            uint32_t        arg_qp_id,
             int             arg_remote_port_id,
             uint32_t        arg_remote_qpn,
             uint16_t        arg_remote_lid
         ) {
-            return 
-                qs_manager->doConnectRemoteRcQp(
-                    arg_qp_name, arg_remote_port_id, arg_remote_qpn, arg_remote_lid
-                );
+            return qs_mgr.doConnectRemoteRcQp2(arg_qp_id, arg_remote_port_id, arg_remote_qpn, arg_remote_lid);
         }
 
-        bool doPost(
+        int doPost2(
             ibv_wr_opcode   arg_opcode,
-            std::string     arg_qp_name,
+            uint32_t        arg_qp_id,
             uintptr_t       arg_buf, 
             uint32_t        arg_len, 
             uint32_t        arg_lk,
@@ -392,7 +292,7 @@ namespace hartebeest {
             struct ibv_sge          sg_elem;
             struct ibv_send_wr*     bad_work_req = nullptr;
 
-            struct ibv_qp* target_qp = qs_manager->getQp(arg_qp_name);
+            struct ibv_qp* target_qp = qs_mgr.getQp2(arg_qp_id);
 
             std::memset(&sg_elem, 0, sizeof(sg_elem));
             std::memset(&work_req, 0, sizeof(work_req));
@@ -414,59 +314,57 @@ namespace hartebeest {
 
             ret = ibv_post_send(target_qp , &work_req, &bad_work_req);
             
-            if (bad_work_req != nullptr) return false;
-            if (ret != 0) return false;
+            if (bad_work_req != nullptr) return CONFR_ERROR_GENERAL;
+            if (ret != 0) return CONFR_ERROR_GENERAL;
 
-            return true;
+            return CONFR_NOERROR;
         }
 
-        
-        bool doRdmaWrite(
-            std::string     arg_qp_name,
+        int doRdmaWrite2(
+            uint32_t        arg_qp_id,
             uintptr_t       arg_buf, 
             uint32_t        arg_len, 
             uint32_t        arg_lk,
             uintptr_t       arg_remote_addr,
             uint32_t        arg_remote_rk
         ) {
-            return doPost(IBV_WR_RDMA_WRITE, arg_qp_name, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
+            return doPost2(IBV_WR_RDMA_WRITE, arg_qp_id, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
         }
 
-        bool doRdmaRead(
-            std::string     arg_qp_name,
+        int doRdmaRead2(
+            uint32_t        arg_qp_id,
             uintptr_t       arg_buf, 
             uint32_t        arg_len, 
             uint32_t        arg_lk,
             uintptr_t       arg_remote_addr,
             uint32_t        arg_remote_rk
         ) {
-            return doPost(IBV_WR_RDMA_READ, arg_qp_name, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
+            return doPost2(IBV_WR_RDMA_READ, arg_qp_id, arg_buf, arg_len, arg_lk, arg_remote_addr, arg_remote_rk);
         }
 
+        // int doPollSingleCq(std::string arg_cq_name) {
+        //     int num_wc = 0;
+        //     struct ibv_wc wc;
 
-        int doPollSingleCq(std::string arg_cq_name) {
-            int num_wc = 0;
-            struct ibv_wc wc;
+        //     struct ibv_cq* cq = qs_manager->getCq(arg_cq_name);
+        //     std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
 
-            struct ibv_cq* cq = qs_manager->getCq(arg_cq_name);
-            std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
-
-            num_wc = ibv_poll_cq(cq, 1, &wc);
+        //     num_wc = ibv_poll_cq(cq, 1, &wc);
             
-            if (wc.status != IBV_WC_SUCCESS) return -1;
-            if (num_wc >= 0) watch_list.push_back(wc);
+        //     if (wc.status != IBV_WC_SUCCESS) return -1;
+        //     if (num_wc >= 0) watch_list.push_back(wc);
 
-            return num_wc;
-        }
+        //     return num_wc;
+        // }
 
-        int doClearCqWatchlist(std::string arg_cq_name) {
+        // int doClearCqWatchlist(std::string arg_cq_name) {
             
-            std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
-            int num_wcs = watch_list.size();
+        //     std::vector<struct ibv_wc> watch_list = cq_watchp_list.find(arg_cq_name)->second;
+        //     int num_wcs = watch_list.size();
 
-            watch_list.clear();
-            return num_wcs;
-        }
+        //     watch_list.clear();
+        //     return num_wcs;
+        // }
 
     };
 
@@ -552,6 +450,46 @@ namespace hartebeest {
      * 
      * 
      */
+
+    //
+    // Elementary structs.
+    // These primitives provide basic arrays without using STL.
+    // Performance reasons.
+    struct Mr {
+        uint32_t    mr_id;
+        uintptr_t   addr;
+        size_t      length;
+        uint32_t    rkey;
+    };
+
+    struct Qp {
+        uint32_t    qp_id;
+        uint32_t    qpn;
+        uint8_t     pid;
+        uint16_t    plid;
+    };
+
+    struct Pd {
+        uint32_t        pd_id;
+        uint32_t        num_mrs;
+        uint32_t        num_qps;
+        struct Mr*      mrs;
+        struct Qp*      qps;
+    };
+
+    struct NodeContext {
+        uint32_t        nid;
+        uint32_t        num_pds;
+        struct Pd*      pds;
+    };
+
+    struct RdmaNetworkContext {
+        uint32_t                num_nodes;
+        struct NodeContext*     nodes;
+    };
+
+    // 
+    // Exchanger
     class ConfigFileExchanger {
     private:
         nlohmann::json      pre_conf;
@@ -583,22 +521,30 @@ namespace hartebeest {
         //
         // Methods for insiders.
         void __gatherAllConfs() {
-            post_conf["all"] = nlohmann::json::array();
+            post_conf = nlohmann::json::array();
             for (auto& member: players) 
-                post_conf["all"].push_back(member.rdma_info);   
+                post_conf.push_back(member.rdma_info);
         }
+
 
         bool __recordSingleConf(
             char* arg_buf, 
             struct sockaddr_in arg_cli_sockaddr, 
             int arg_cli_fd) {
             
+#ifdef LOG_ENABLED
+            int node_id;
+#endif
+
             try {
                 nlohmann::json rdma_info = nlohmann::json::parse(std::string(arg_buf));
 
                 int idx = -1;
-                rdma_info.at("nid").get_to(idx);
+                rdma_info.at("n").get_to(idx);
 
+#ifdef LOG_ENABLED
+                node_id = players.at(idx).node_id;
+#endif
                 if (players.at(idx).state == STATE_FILLED)
                     return false;
                 
@@ -611,7 +557,12 @@ namespace hartebeest {
                 delete[] players.at(idx).buf;
                 players.at(idx).buf = nullptr;
 
-            } catch(...) { return false; }
+            } catch(...) { 
+#ifdef LOG_ENABLED
+                spdlog::info("[HB] More to receive from Node ID {}.", node_id);
+#endif
+                return false;
+            }
 
             return true;
         }
@@ -625,6 +576,10 @@ namespace hartebeest {
         }
 
         bool __runServer(int arg_buf_size = 81920, int arg_max_client = 11) {
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Running server.");
+#endif
             
             int                 bsize = 1;
             char*               buf = nullptr;
@@ -688,6 +643,10 @@ namespace hartebeest {
             // Phase 1. Receive all of the Queue Pair information from each node. 
             // This phase blocks until it receives all the infos.
             while (!isEveryoneInState(STATE_FILLED)) {
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Epoll waiting...");
+#endif
                 
                 event_num = epoll_wait(epoll_fd, events, MAX_CLIENT, -1); 
                 if (event_num == -1) goto exit_srv;
@@ -696,10 +655,22 @@ namespace hartebeest {
                     if (events[i].data.fd == sock_listen_fd) {
                         // Case, when a node first connects to this server node.
 
+#ifdef LOG_ENABLED
+                        spdlog::info("[HB] A new client found.");
+#endif
+
                         sock_client_fd = accept(sock_listen_fd, (struct sockaddr *)&client_sockaddr, &client_socklen);
+
+#ifdef LOG_ENABLED
+                        spdlog::info("[HB] Accepted.");
+#endif
                         
                         std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
-                        recv_sz = read(sock_client_fd, buf, BUFFER_SIZE);   
+                        recv_sz = read(sock_client_fd, buf, BUFFER_SIZE);
+
+#ifdef LOG_ENABLED
+                        spdlog::info("[HB] Node ID ({}) read from socket {}.", *(int*)buf, sock_client_fd);
+#endif
 
                         //
                         // At the first conection, client node sends its node ID as a "hello".
@@ -730,8 +701,16 @@ namespace hartebeest {
                                 // Sever has seen this client node before. 
                                 // In this scope, it reads JSON data from the client that contains only its RDMA QP/MR context. 
 
+#ifdef LOG_ENABLED
+                                spdlog::info("[HB] Event again from Node ID {}", member.node_id);
+#endif
+
                                 recv_sz = read(sock_client_fd, member.buf + member.recv_sz, BUFFER_SIZE - member.recv_sz);
                                 member.recv_sz += recv_sz;
+
+#ifdef LOG_ENABLED
+                                spdlog::info("[HB] received {} bytes.", member.node_id, recv_sz);
+#endif
 
                                 // After executing a single read, further data may remain. 
                                 // Client will continue writing to the socket, while some are finished or in progress.
@@ -762,6 +741,9 @@ namespace hartebeest {
             std::memset(buf, 0, sizeof(char) * BUFFER_SIZE);
             std::memcpy(buf, post_conf.dump().c_str(), send_sz);
 
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Server in the distribution phase.");
+#endif
             while (!isEveryoneInState(STATE_DISTRIBUTED)) {
                 
                 for (auto& member: players) {
@@ -772,8 +754,12 @@ namespace hartebeest {
                     // The size of the file must be reasonaly set.
                     
                     offset = 0;
-                    while (send_sz > offset)
+                    while (send_sz > offset) {
                         offset += write(member.fd, buf + offset, send_sz - offset);
+#ifdef LOG_ENABLED
+                        spdlog::info("[HB] Written to Node ID {}/{} bytes.", offset, send_sz);
+#endif
+                    }
 
                     member.state = STATE_DISTRIBUTED;
                     close(member.fd);
@@ -788,6 +774,9 @@ exit_srv:
 
             close(epoll_fd);
 
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Server terminated.");
+#endif
             return ret;
         }
 
@@ -826,10 +815,18 @@ exit_srv:
                 == -1)
                 sleep(1);
 
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Conntected to Node ID {}.", server_node.node_id);
+#endif
+
             // Notify this node.
             // Simple!
             write(sock_conn_fd, &this_node_id, sizeof(this_node_id));
                 // It is a simple 4-byte write. The client do not assume to be failed.
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Notiied this Node ID {} to Node ID {}.", this_node.node_id, server_node.node_id);
+#endif
 
             this_node_dump = getThisNodeRdmaInfo().dump();
 
@@ -839,8 +836,17 @@ exit_srv:
             
             send_sz = this_node_dump.size();
 
-            while (send_sz > offset)
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Waiting for 5 seconds...");
+#endif
+            sleep(5);
+
+            while (send_sz > offset) {
                 offset += write(sock_conn_fd, buf + offset, send_sz - offset);
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Sent this configuration of {}/{} bytes.", offset, send_sz);
+#endif
+            }
 
             // Receive All infos.
             offset = 0;
@@ -849,6 +855,10 @@ exit_srv:
             while (recv_sz > 0) {
                 recv_sz = read(sock_conn_fd, buf + offset, BUFFER_SIZE - offset);
                 offset += recv_sz;
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Received post configuration of {} bytes.", recv_sz);
+#endif
             }
 
             post_conf = nlohmann::json::parse(std::string(buf));
@@ -859,11 +869,12 @@ exit_srv:
             ret = true;
 exit_cli:
             delete[] buf;
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Client terminated.");
+#endif
             return ret;
         }
-
-
-
 
 
     public:
@@ -915,66 +926,7 @@ exit_cli:
             return players.at(this_node_idx).rdma_info;
         }
 
-private:
-        nlohmann::json __getOtherNodeQp(int arg_node_id, std::string arg_qp_name) {
-            std::string qp_name{};
-
-            for (auto& node: post_conf.at("all")) {
-                if (node.at("nid") != arg_node_id) continue;
-
-                for (auto& qp: node.at("qps")) {
-
-                    qp.at("qp_name").get_to(qp_name);
-                    if (qp_name == arg_qp_name)
-                        return qp;
-                }
-            }
-
-            return nlohmann::json{};
-        }
-
-        nlohmann::json __getOtherNodeMr(int arg_node_id, std::string arg_mr_name) {
-            std::string mr_name{};
-
-            for (auto& node: post_conf.at("all")) {
-                if (node.at("nid") != arg_node_id) continue;
-
-                for (auto& qp: node.at("mrs")) {
-
-                    qp.at("mr_name").get_to(mr_name);
-                    if (mr_name == arg_mr_name)
-                        return qp;
-                }
-            }
-
-            return nlohmann::json{};
-        }
-
 public:
-        int getOtherNodeQpn(int arg_node_id, std::string arg_qp_name) {
-            return __getOtherNodeQp(arg_node_id, arg_qp_name).at("qpn");
-        }
-
-        int getOtherNodePortId(int arg_node_id, std::string arg_qp_name) {
-            return __getOtherNodeQp(arg_node_id, arg_qp_name).at("pid");
-        }
-
-        int getOtherNodePortLid(int arg_node_id, std::string arg_qp_name) {
-            return __getOtherNodeQp(arg_node_id, arg_qp_name).at("plid");
-        }
-
-        uintptr_t getOtherNodeMrAddr(int arg_node_id, std::string arg_mr_name) {
-            return __getOtherNodeMr(arg_node_id,arg_mr_name).at("addr");
-        }
-
-        uint32_t getOtherNodeMrLk(int arg_node_id, std::string arg_mr_name) {
-            return __getOtherNodeMr(arg_node_id,arg_mr_name).at("lk");
-        }
-
-        uint32_t getOtherNodeMrRk(int arg_node_id, std::string arg_mr_name) {
-            return __getOtherNodeMr(arg_node_id,arg_mr_name).at("rk");
-        }
-
         void setPostConf(nlohmann::json arg_post_conf) {
             post_conf = arg_post_conf;
         }
@@ -1075,10 +1027,7 @@ public:
 
             return ret;
         }
-  
 
-        //
-        // Do things following your role!
         bool doExchange() {
 
             if (getPlayerServer().node_id == this_node_idx)
@@ -1087,6 +1036,80 @@ public:
             else {
                 return __runClient();
             }
+        }
+
+        struct RdmaNetworkContext doExportNetworkContext() {
+
+            struct RdmaNetworkContext   actx;
+            
+            actx.num_nodes = post_conf.size();
+            actx.nodes = reinterpret_cast<struct NodeContext*>(
+                std::malloc(sizeof(struct NodeContext) * actx.num_nodes));
+
+            int ni = 0, pi = 0, mi = 0, qi = 0;
+
+            for (auto node: post_conf) {
+                node.at("n").get_to(actx.nodes[ni].nid);
+
+                actx.nodes[ni].num_pds = node.at("p").size();
+                actx.nodes[ni].pds = reinterpret_cast<struct Pd*>(
+                    std::malloc(sizeof(struct Pd) * actx.nodes[ni].num_pds));
+
+                for (auto pd: node.at("p")) {
+                    
+                    pd.at("i").get_to(actx.nodes[ni].pds[pi].pd_id);
+
+                    actx.nodes[ni].pds[pi].num_mrs = pd.at("m").size();
+                    actx.nodes[ni].pds[pi].num_qps = pd.at("q").size();
+
+                    actx.nodes[ni].pds[pi].mrs = reinterpret_cast<struct Mr*>(
+                        std::malloc(sizeof(struct Mr) * actx.nodes[ni].pds[pi].num_mrs));
+
+                    actx.nodes[ni].pds[pi].qps = reinterpret_cast<struct Qp*>(
+                        std::malloc(sizeof(struct Qp) * actx.nodes[ni].pds[pi].num_qps));
+
+                    for (auto mr: pd.at("m")) {
+                        
+                        mr.at("i").get_to(actx.nodes[ni].pds[pi].mrs[mi].mr_id);
+                        mr.at("a").get_to(actx.nodes[ni].pds[pi].mrs[mi].addr);
+                        mr.at("s").get_to(actx.nodes[ni].pds[pi].mrs[mi].length);
+                        mr.at("r").get_to(actx.nodes[ni].pds[pi].mrs[mi].rkey);
+
+                        mi++;
+                    }
+                    mi = 0;
+
+                    for (auto qp: pd.at("q")) {
+                        
+                        qp.at("i").get_to(actx.nodes[ni].pds[pi].qps[qi].qp_id);
+                        qp.at("q").get_to(actx.nodes[ni].pds[pi].qps[qi].qpn);
+                        qp.at("p").get_to(actx.nodes[ni].pds[pi].qps[qi].pid);
+                        qp.at("l").get_to(actx.nodes[ni].pds[pi].qps[qi].plid);
+
+                        qi++;
+                    }
+                    qi = 0;
+                    pi++;
+                }
+                pi = 0;
+                ni++;
+            }
+
+            return actx;
+        }
+
+        void doCleanNetworkContext(struct RdmaNetworkContext& arg_net_ctx) {
+            
+            for (uint32_t ni = 0; ni < arg_net_ctx.num_nodes; ni++) {
+                for (uint32_t pi = 0; pi < arg_net_ctx.nodes[ni].num_pds; pi++) {
+                    std::free(arg_net_ctx.nodes[ni].pds[pi].mrs);
+                    std::free(arg_net_ctx.nodes[ni].pds[pi].qps);
+                } 
+
+                std::free(arg_net_ctx.nodes[ni].pds);
+            }
+
+            std::free(arg_net_ctx.nodes);
         }
     };
 

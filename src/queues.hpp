@@ -16,6 +16,7 @@
 
 #include <infiniband/verbs.h> // OFED IB verbs
 
+#include <cstring>
 #include <iostream>
 
 #include "common.hpp"
@@ -33,13 +34,18 @@ namespace hartebeest {
      *  - Creation of a Queue Pair
      */
 
-    struct RcInfo {
-
-
-    };
-
-    struct UdInfo {
-
+    // PDM Return codes.
+    // This class do not use throws.
+    enum {
+        QM_NOERROR = 0,
+        QM_ERROR_GENERAL = 0x30,
+        QM_ERROR_KEY_EXIST,
+        QM_ERROR_KEY_NOEXIST,
+        QM_ERROR_QP_CREATE,
+        QM_ERROR_CQ_CREATE,
+        QM_ERROR_INITQP,
+        QM_ERROR_GENERAL_MODQP,
+        QM_ERRROR_NULL_CONTEXT
     };
 
     //
@@ -59,12 +65,9 @@ namespace hartebeest {
         // qp_list holds unique_ptr type (with a deleter).
         //
         // A user can distinguish multiple CQs and QPs with their name.
+        std::map<uint32_t, struct ibv_cq*>          cq_dbm; // Completion Queue DB map
+        std::map<uint32_t, struct ibv_qp*>          qp_dbm; // Queue Pair DB map
 
-        std::map<std::string, size_t>               cqinfo_map;
-        std::vector<del_unique_ptr<struct ibv_cq>>  cq_list{};
-
-        std::map<std::string, size_t>               qpinfo_map;
-        std::vector<del_unique_ptr<struct ibv_qp>>  qp_list{};
 
         // Fixed vars.
         const int       default_cq_depth = 128;
@@ -74,7 +77,11 @@ namespace hartebeest {
 
     public:
         QueueManager() { }
-        ~QueueManager() { }
+        ~QueueManager() {
+
+            for (auto& elem: cq_dbm) ibv_destroy_cq(elem.second);
+            for (auto& elem: qp_dbm) ibv_destroy_qp(elem.second);
+        }
 
         //
         // The inteface naming convention is designed to have:
@@ -84,38 +91,42 @@ namespace hartebeest {
         //  - get** : Returns reference/value of a member. 
         //
         //  Members follow the underscore, methods follow the CamelCase naming convention.
-        bool isCqRegistered(std::string arg_cq_name) {
-            if (cqinfo_map.find(arg_cq_name) != cqinfo_map.end())
+        bool isCqRegistered2(uint32_t arg_cq_id) {
+            if (cq_dbm.find(arg_cq_id) != cq_dbm.end())
                 return true;
             return false;
         }
 
-        bool isQpRegistered(std::string arg_qp_name) {
-            if (qpinfo_map.find(arg_qp_name) != qpinfo_map.end())
+        bool isQpRegistered2(uint32_t arg_qp_id) {
+            if (qp_dbm.find(arg_qp_id) != qp_dbm.end())
                 return true;
             return false;
         }
 
-        size_t getCqIdx(std::string arg_cq_name) {
-            return cqinfo_map.find(arg_cq_name)->second;
-        }
-        
-        struct ibv_cq* getCq(std::string arg_cq_name) {
-            if (!isCqRegistered(arg_cq_name))
+        struct ibv_cq* getCq2(uint32_t arg_cq_id) {
+            if (!isCqRegistered2(arg_cq_id))
                 return nullptr;
 
-            return cq_list.at(getCqIdx(arg_cq_name)).get();
-        }     
-
-        size_t getQpIdx(std::string arg_qp_name) {
-            return qpinfo_map.find(arg_qp_name)->second;
+            return cq_dbm.find(arg_cq_id)->second;
         }
 
-        struct ibv_qp* getQp(std::string arg_qp_name) {
-            if (!isQpRegistered(arg_qp_name))
+        struct ibv_qp* getQp2(uint32_t arg_qp_id) {
+            if (!isQpRegistered2(arg_qp_id))
                 return nullptr;
 
-            return qp_list.at(getQpIdx(arg_qp_name)).get();
+            return qp_dbm.find(arg_qp_id)->second;
+        }
+
+        std::map<uint32_t, struct ibv_qp*>& getQpMap() { return qp_dbm; }
+
+        std::vector<struct ibv_qp*> getAssociatedQps(struct ibv_pd* arg_pd) {
+            
+            std::vector<struct ibv_qp*> ret;
+            for (auto& elem: qp_dbm) {
+                if (elem.second->pd == arg_pd) ret.push_back(elem.second);
+            }
+
+            return ret;
         }
 
         //
@@ -125,40 +136,28 @@ namespace hartebeest {
         //  - Associates with IB context arg_ctx.
         //  - Registers to management container, cq_list and cqinfo_map.
         //
-        bool doRegisterCq(std::string arg_cq_name, struct ibv_context* arg_ctx) {
+        int doRegisterCq2(uint32_t arg_cq_id, struct ibv_context* arg_ctx) {
 
             // Simple verification. It should not have the same key.
-            if (isCqRegistered(arg_cq_name)) 
-                return false;
+            if (isCqRegistered2(arg_cq_id)) 
+                return QM_ERROR_KEY_EXIST;
             
             // Creates CQ.
             auto cq = ibv_create_cq(arg_ctx, default_cq_depth, nullptr, nullptr, 0);
 
-            if (cq == nullptr) return false;
+            if (cq == nullptr) 
+                return QM_ERROR_CQ_CREATE;
 
-            del_unique_ptr<struct ibv_cq> uniq_cq(cq, [](struct ibv_cq *arg_cq) {
-                auto ret = ibv_destroy_cq(arg_cq);
-                if (ret != 0) ;
-                    // Do nothing, for now.
-            });
+            cq_dbm.insert(std::pair<uint32_t, struct ibv_cq*>(arg_cq_id, cq));
 
-            //
-            // Preventing over/underflow.
-            // Corner case exists in Mu.
-            int idx = cq_list.size();
-            
-            cq_list.push_back(std::move(uniq_cq));
-            cqinfo_map.insert(std::pair<std::string, size_t>(arg_cq_name, idx));
-
-            return true;
+            return QM_NOERROR;
         }
 
-
-        bool doCreateAndRegisterRcQp(
-                std::string     arg_qp_name, 
+        int doCreateAndRegisterRcQp2(
+                uint32_t        arg_qp_id, 
                 struct ibv_pd*  arg_pd,
-                std::string     arg_send_cq_name,
-                std::string     arg_recv_cq_name
+                uint32_t        arg_send_cq_id,
+                uint32_t        arg_recv_cq_id
             ) {
             
             struct ibv_qp_init_attr iq;
@@ -166,12 +165,12 @@ namespace hartebeest {
             //
             // Verifications.
             //  Should not be already registered.
-            if (isQpRegistered(arg_qp_name)) return false;
+            if (isQpRegistered2(arg_qp_id)) return QM_ERROR_KEY_EXIST;
             
             //
             // Should have been registered.
-            if (!isCqRegistered(arg_send_cq_name)) return false;
-            if (!isCqRegistered(arg_recv_cq_name)) return false;
+            if (!isCqRegistered2(arg_send_cq_id)) return QM_ERROR_KEY_NOEXIST;
+            if (!isCqRegistered2(arg_recv_cq_id)) return QM_ERROR_KEY_NOEXIST;
 
             std::memset(&iq, 0, sizeof(iq));
 
@@ -182,55 +181,46 @@ namespace hartebeest {
             iq.cap.max_recv_sge         = default_qp_sge_depth;
             iq.cap.max_inline_data      = default_qp_max_inlining;
 
-            iq.send_cq                  = getCq(arg_send_cq_name);
-            iq.recv_cq                  = getCq(arg_recv_cq_name);
+            iq.send_cq                  = getCq2(arg_send_cq_id);
+            iq.recv_cq                  = getCq2(arg_recv_cq_id);
 
             //
             // Creates Queue Pair.
             auto qp = ibv_create_qp(arg_pd, &iq);
-            if (qp == nullptr) return false;
+            if (qp == nullptr)  
+                return QM_ERROR_QP_CREATE;
 
-            auto uniq_qp = del_unique_ptr<struct ibv_qp>(qp, [](struct ibv_qp* arg_qp) {
-                    auto ret = ibv_destroy_qp(arg_qp);
-                    if (ret != 0) ;
-                        // Nothing, for now.
-            });
+            qp_dbm.insert(std::pair<uint32_t, struct ibv_qp*>(arg_qp_id, qp));
 
-            int idx = qp_list.size();
-
-            qp_list.push_back(std::move(uniq_qp));
-            qpinfo_map.insert(
-                std::pair<std::string, size_t>(arg_qp_name, idx)
-            );
-
-            return true;
+            return QM_NOERROR;
         }
+
     
         // 
         // Does QP transitions to RESET state.
-        bool doQpReset(std::string arg_qp_name) {
-            if (!isQpRegistered(arg_qp_name)) return false;
+        // bool doQpReset(std::string arg_qp_name) {
+        //     if (!isQpRegistered(arg_qp_name)) return false;
 
-            struct ibv_qp_attr attr;
-            memset(&attr, 0, sizeof(attr));
+        //     struct ibv_qp_attr attr;
+        //     memset(&attr, 0, sizeof(attr));
 
-            // Sets attribute qp_state to RESET.
-            attr.qp_state = IBV_QPS_RESET;
+        //     // Sets attribute qp_state to RESET.
+        //     attr.qp_state = IBV_QPS_RESET;
 
-            // Turn!
-            auto ret = ibv_modify_qp(qp_list.at(getQpIdx(arg_qp_name)).get(), &attr, IBV_QP_STATE);
+        //     // Turn!
+        //     auto ret = ibv_modify_qp(qp_list.at(getQpIdx(arg_qp_name)).get(), &attr, IBV_QP_STATE);
 
-            if (ret != 0)
-                return false;
+        //     if (ret != 0)
+        //         return false;
 
-            return true;
-        }
+        //     return true;
+        // }
 
         //
         // Initializes QP. 
         // Note that right after the creation of a QP, it stays at RESET state.
         // doInitQp makes the transition to INIT state.
-        bool doInitQp(std::string arg_qp_name, int arg_port_id) {
+        int doInitQp2(uint32_t arg_qp_id, int arg_port_id) {
 
             struct ibv_qp_attr init_attr;
             memset(&init_attr, 0, sizeof(struct ibv_qp_attr));
@@ -242,17 +232,18 @@ namespace hartebeest {
                 IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE; // Local Read + ...
 
             auto ret = ibv_modify_qp(
-                getQp(arg_qp_name), 
+                getQp2(arg_qp_id), 
                 &init_attr,
                 IBV_QP_STATE | IBV_QP_PKEY_INDEX 
                     | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS);
 
-            if (ret != 0) return false;
-            return true;
+            if (ret != 0) return QM_ERROR_INITQP;
+            return QM_NOERROR;
+
         }
 
-        bool doConnectRemoteRcQp(
-            std::string     arg_qp_name,
+        int doConnectRemoteRcQp2(
+            uint32_t        arg_qp_id,
             int             arg_remote_port_id,
             uint32_t        arg_remote_qpn,
             uint16_t        arg_remote_lid
@@ -279,8 +270,8 @@ namespace hartebeest {
                 IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
                 IBV_QP_MIN_RNR_TIMER;
 
-            auto ret = ibv_modify_qp(getQp(arg_qp_name), &connect_attr, rtr_flags);
-            if (ret != 0) return false;
+            auto ret = ibv_modify_qp(getQp2(arg_qp_id), &connect_attr, rtr_flags);
+            if (ret != 0) return QM_ERROR_GENERAL_MODQP;
 
             memset(&connect_attr, 0, sizeof(struct ibv_qp_attr));
             connect_attr.qp_state   = IBV_QPS_RTS;
@@ -295,19 +286,17 @@ namespace hartebeest {
             int rts_flags = IBV_QP_STATE | IBV_QP_SQ_PSN | IBV_QP_TIMEOUT |
                   IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_MAX_QP_RD_ATOMIC;
 
-            ret = ibv_modify_qp(getQp(arg_qp_name), &connect_attr, rts_flags);
-            if (ret != 0) return false;
+            ret = ibv_modify_qp(getQp2(arg_qp_id), &connect_attr, rts_flags);
+            if (ret != 0) return QM_ERROR_GENERAL_MODQP;
 
-            return true;
+            return QM_NOERROR;
         }
 
-        bool doQpTransition() {
 
-            return true;
-        }
+        // bool doQpTransition() {
 
-        
-
+        //     return true;
+        // }
         
     };
 }
