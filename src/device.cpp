@@ -3,6 +3,5 @@
  * device.cpp
  */
 
-#include "common.hpp"
 #include "device.hpp"
 

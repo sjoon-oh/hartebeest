@@ -15,7 +15,6 @@
 
 #include <infiniband/verbs.h> // OFED IB verbs
 
-#include "common.hpp"
 #include "prot-domain.hpp"
 
 #include <iostream>

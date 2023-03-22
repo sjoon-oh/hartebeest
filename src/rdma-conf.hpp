@@ -413,41 +413,32 @@ namespace hartebeest {
      * 
      *  - Post-Configuration File
      *      This file which is named "post-conf.json" (default)
-     *      should strictly follow the form of:
+     *      should strictly follow the form of a list of objects:
      *      
-     *      {
-     *          "all" : [
-     *              {
-     *                  "nid": 0,
-     *                  "qps": [
-     *                      {"pid": 1, "plid": 6, "qp_name": "some-qp-1", "qpn": 21031 },
-     *                      {"pid": 1, "plid": 6, "qp_name": "some-qp-2", "qpn": 21032 },
-     *                  ]
-     *              },
-     *              {
-     *                  "nid": 1,
-     *                  "qps": [
-     *                      {"pid": 1, "plid": 5, "qp_name": "some-qp-1", "qpn": 1020 },
-     *                      {"pid": 1, "plid": 5, "qp_name": "some-qp-2", "qpn": 1021 },
-     *                  ]
-     *              },
+     *      [
+     *          {
+     *              "n": <node_id>, 
+     *              "p": [
+     *                  {"i": <pd_id>, "m": [<list_of_mr>], "q": [<list_of_qp>]}, 
+     *                  {"i": <pd_id>, "m": [<list_of_mr>], "q": [<list_of_qp>]}, 
+     *                  ...
+     *              ]
+     *          }, 
+     *          {
      *              ...
-     *              {
-     *                  "nid": 1,
-     *                  "mrs": [
-     *                      {"addr": 1234, "lk": 5345, "mr_name": "some-mr-1", "pd_name": "some-pd-1", "rk": 12345 },
-     *                      ...
-     *                  ]
-     *              },
-     *          ]
-     *      }
+     *          },
+     *          ...
+     *      ]
      * 
-     *      The file has single key, "all" which contains an array. 
-     *      Each element in the array holds (1) "nid", (2) array of queue pair information under 
-     *          the key "qps", and (3) array of memory region under the "mrs".
+     *      This file is an array of multiple objects.
+     *      Each objects represent a node. Each node may hold mutliple protection domains, which are comprised
+     *      of multiple abstract RDMA resources, MRs and QPs. 
+     *      An object has its node ID under a key "n", and a key "p" contains a list of protection domains.
+     *      Each sub-object in the list of protection domain has three keys: "i" for the protection domain ID, 
+     *      "m" for the list of MRs, and "q" for the list of QPs. 
+     *  
      *      The file contains all of the queue pairs exist in the network, of the stated nodes pre-defined in
      *      the preconfig file. 
-     * 
      * 
      */
 

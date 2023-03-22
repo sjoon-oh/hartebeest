@@ -19,8 +19,6 @@
 #include <cstring>
 #include <iostream>
 
-#include "common.hpp"
-
 
 namespace hartebeest {
 
