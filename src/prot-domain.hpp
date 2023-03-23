@@ -18,7 +18,6 @@
 
 #include <iostream>
 
-#include "common.hpp"
 #include "device.hpp"
 #include "mem-region.hpp"
 

@@ -36,5 +36,5 @@ target_compile_options(
 )
 
 # Essentials
-target_link_libraries(${DEMO_TARGET}        PUBLIC ibverbs)
-target_link_libraries(${LIB_HARTEBEEST}     PUBLIC ibverbs)
+target_link_libraries(${DEMO_TARGET}        PUBLIC ibverbs pthread)
+target_link_libraries(${LIB_HARTEBEEST}     PUBLIC ibverbs pthread)

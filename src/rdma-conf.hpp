@@ -26,6 +26,10 @@
 #include <sys/epoll.h>
 #include <unistd.h> // For write(), read()
 
+//
+#include <functional>
+#include <thread>
+
 // extern.
 #include "nlohmann/json.hpp"
 
@@ -586,6 +590,9 @@ namespace hartebeest {
             struct sockaddr_in  client_sockaddr;
             socklen_t           client_socklen;
 
+            std::vector<std::mutex> member_guard(players.size());
+            std::vector<std::thread> handlers;    // Record spawned handlers here.
+
             //
             // Setups.
             struct Node& this_node = players.at(this_node_idx); // This throws!
@@ -628,12 +635,12 @@ namespace hartebeest {
                 // Server is already filled,
                 // Since it has its own RDMA infos. 
                 // STATE_FILLED indicates that the RDMA info of a node is prepared (received).
-                //  (..in the vector player. )
+                //  (..in the vector player. )         
 
             //
             // Phase 1. Receive all of the Queue Pair information from each node. 
             // This phase blocks until it receives all the infos.
-            while (!isEveryoneInState(STATE_FILLED)) {
+            while (!isEveryoneInState(STATE_FILLED, member_guard)) {
 
 #ifdef LOG_ENABLED
             spdlog::info("[HB] Epoll waiting...");
@@ -688,20 +695,66 @@ namespace hartebeest {
                     else {  // I've seen this fd before!
                         for (auto& member: players) {
                             if (events[i].data.fd == member.fd) {
-                                
-                                // Sever has seen this client node before. 
-                                // In this scope, it reads JSON data from the client that contains only its RDMA QP/MR context. 
-
 #ifdef LOG_ENABLED
-                                spdlog::info("[HB] Event again from Node ID {}", member.node_id);
+                                spdlog::info("[HB] Event again from Node ID {}, handler detached.", member.node_id);
 #endif
 
-                                recv_sz = read(sock_client_fd, member.buf + member.recv_sz, BUFFER_SIZE - member.recv_sz);
-                                member.recv_sz += recv_sz;
+                                std::thread worker_t(
+                                    [&BUFFER_SIZE, &member_guard](
+                                        int arg_sock_client_fd, 
+                                        struct sockaddr_in arg_cli_sockaddr, 
+                                        struct Node& arg_member) {
+                                        
+                                        // std::lock_guard<std::mutex> lock_guard(member_guard.at(arg_member.node_id));
+                                        member_guard.at(arg_member.node_id).lock();
+
+                                        if (arg_member.state == STATE_FILLED) {
+                                            member_guard.at(arg_member.node_id).unlock();
+                                            return -1;
+                                        }
+
+                                        int received;
+
+                                        received = read(arg_sock_client_fd, arg_member.buf + arg_member.recv_sz, BUFFER_SIZE - arg_member.recv_sz);
+                                        arg_member.recv_sz += received;
 
 #ifdef LOG_ENABLED
-                                spdlog::info("[HB] received {} bytes.", member.node_id, recv_sz);
+                                        spdlog::info("[HB] Handler for node ID {}, received {} bytes.", arg_member.node_id, received);
+                                        // spdlog::info("[HB] Buffer {}: {}", arg_member.node_id, arg_member.buf);
 #endif
+
+                                        if (received == -1) {
+                                            member_guard.at(arg_member.node_id).unlock();
+                                            return -1;
+                                        }
+
+                                        try {
+                                            nlohmann::json parsed = nlohmann::json::parse(std::string(arg_member.buf));
+
+                                            int idx = -1;
+                                            parsed.at("n").get_to(idx);
+                                            
+                                            arg_member.rdma_info        = parsed;
+                                            arg_member.state            = STATE_FILLED;
+                                            arg_member.fd               = arg_sock_client_fd;
+                                            arg_member.sockaddr_info    = arg_cli_sockaddr;
+
+                                            delete[] arg_member.buf;
+                                            arg_member.buf              = nullptr;
+                                        } 
+                                        catch (...) {
+                                            member_guard.at(arg_member.node_id).unlock();
+                                            return -1;
+                                        }
+
+                                        member_guard.at(arg_member.node_id).unlock();
+                                        return 0;
+                                    },
+                                    sock_client_fd, client_sockaddr, std::ref(member) // arguments
+                                );
+
+                                // worker_t.detach();      // Run in the background
+                                handlers.push_back(std::move(worker_t));
 
                                 // After executing a single read, further data may remain. 
                                 // Client will continue writing to the socket, while some are finished or in progress.
@@ -711,13 +764,22 @@ namespace hartebeest {
                                 // If it is the case, the member is not recorded as STATE_FILLED. Unfilled member continues to
                                 // be recorded (appended) the JSON data by read() in this scope.
 
-                                if (recv_sz == -1) goto exit_srv;
-                                if (__recordSingleConf(member.buf, client_sockaddr, sock_client_fd) == false)
-                                    continue;
+                                // if (recv_sz == -1) goto exit_srv;
                             }
                         }
                     }
                 }
+            }
+
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] Waiting all handlers to finish.");
+#endif
+
+            for (auto& thr: handlers) {
+                thr.join();
+#ifdef LOG_ENABLED
+            spdlog::info("[HB] OK");
+#endif
             }
 
             // STATE_DISTRIBUTED implies that the client has all the information of RDMA MR/QPs in
@@ -735,7 +797,7 @@ namespace hartebeest {
 #ifdef LOG_ENABLED
             spdlog::info("[HB] Server in the distribution phase.");
 #endif
-            while (!isEveryoneInState(STATE_DISTRIBUTED)) {
+            while (!isEveryoneInState(STATE_DISTRIBUTED, member_guard)) {
                 
                 for (auto& member: players) {
                     if (member.role == ROLE_SERVER) continue;
@@ -830,7 +892,7 @@ exit_srv:
 #ifdef LOG_ENABLED
             spdlog::info("[HB] Waiting for 5 seconds...");
 #endif
-            sleep(5);
+            sleep(3);
 
             while (send_sz > offset) {
                 offset += write(sock_conn_fd, buf + offset, send_sz - offset);
@@ -902,7 +964,7 @@ exit_cli:
         struct Node getPlayerServer() { 
             struct Node server;
 
-            for (auto member: players) 
+            for (auto& member: players) 
                 if (member.role == ROLE_SERVER)
                     server = member;
 
@@ -940,11 +1002,16 @@ public:
             return true;
         }
 
-        bool isEveryoneInState(int arg_state) {
+        bool isEveryoneInState(int arg_state, std::vector<std::mutex>& arg_guard) {
             bool ret = true;
             
-            for (auto& member: players) 
-                if (member.state != arg_state) ret = false;
+            for (auto& member: players) {
+                // std::lock_guard<std::mutex> lock_guard(arg_guard.at(member.node_id));     // Lock to read state.
+                arg_guard.at(member.node_id).lock();
+                if (member.state != arg_state) 
+                    ret = false;
+                arg_guard.at(member.node_id).unlock();
+            }
             
             return ret;
         }
@@ -983,6 +1050,8 @@ public:
                 //  For instance, the function do not know how to handle conflicting node IDs,
                 //  or multiple nodes who claims to be a server (NODE_ID = 0).
 
+                players.resize(pre_conf.at("participants").size());
+
                 for (auto& participant: pre_conf.at("participants")) {
                     
                     struct Node member;
@@ -1008,7 +1077,7 @@ public:
                     member.state = STATE_UNKNOWN;
                     member.fd = -1;
 
-                    players.push_back(member);  // Register
+                    players.at(member.node_id) = member;  // Register
                 }
             }
             catch (...) {
