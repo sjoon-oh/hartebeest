@@ -1,1 +1,0 @@
-/opt/rh/devtoolset-7/root/usr/bin/c++ CMakeFiles/demo.run.dir/test/demo2.cpp.o -o build/demo.run  -libverbs -lpthread 

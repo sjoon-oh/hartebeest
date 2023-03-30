@@ -1,4 +1,0 @@
-/home/oslab/sjoon/workspace/git/hartebeest/CMakeFiles/demo.run.dir
-/home/oslab/sjoon/workspace/git/hartebeest/CMakeFiles/libhartebeest.dir
-/home/oslab/sjoon/workspace/git/hartebeest/CMakeFiles/edit_cache.dir
-/home/oslab/sjoon/workspace/git/hartebeest/CMakeFiles/rebuild_cache.dir
