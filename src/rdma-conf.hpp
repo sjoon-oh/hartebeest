@@ -641,10 +641,6 @@ namespace hartebeest {
             // Phase 1. Receive all of the Queue Pair information from each node. 
             // This phase blocks until it receives all the infos.
             while (!isEveryoneInState(STATE_FILLED, member_guard)) {
-
-#ifdef LOG_ENABLED
-            spdlog::info("[HB] Epoll waiting...");
-#endif
                 
                 event_num = epoll_wait(epoll_fd, events, MAX_CLIENT, -1); 
                 if (event_num == -1) goto exit_srv;
@@ -652,6 +648,7 @@ namespace hartebeest {
                 for (int i = 0; i < event_num; i++) {
                     if (events[i].data.fd == sock_listen_fd) {
                         // Case, when a node first connects to this server node.
+                        
 
 #ifdef LOG_ENABLED
                         spdlog::info("[HB] A new client found.");
@@ -680,14 +677,19 @@ namespace hartebeest {
 
                         player_idx = getPlayerIdx(*(int*)buf);  // "hello", your node ID is recognized.
 
+                        member_guard.at(player_idx).lock();
+
                         players.at(player_idx).buf = new char[BUFFER_SIZE];
                         players.at(player_idx).recv_sz = 0;
                         players.at(player_idx).fd = sock_client_fd;     // OK, you are acked.
+                        players.at(player_idx).node_id = player_idx;
 
                         std::memset(players.at(player_idx).buf, 0, sizeof(char) * BUFFER_SIZE);
                         
                         ev.events   = EPOLLIN;
                         ev.data.fd  = sock_client_fd; 
+
+                        member_guard.at(player_idx).unlock();
                             // If any further request comes, it will be distinguished by its fd.
 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock_client_fd, &ev) == -1) goto exit_srv;
@@ -696,12 +698,11 @@ namespace hartebeest {
                         for (auto& member: players) {
                             if (events[i].data.fd == member.fd) {
 #ifdef LOG_ENABLED
-                                spdlog::info("[HB] Event again from Node ID {}, handler detached.", member.node_id);
+                                spdlog::info("[HB] Event again from Node ID {}, sock({}), handler detached.", member.node_id, member.fd);
 #endif
 
                                 std::thread worker_t(
-                                    [&BUFFER_SIZE, &member_guard](
-                                        int arg_sock_client_fd, 
+                                    [&BUFFER_SIZE, &member_guard, &epoll_fd, &ev](
                                         struct sockaddr_in arg_cli_sockaddr, 
                                         struct Node& arg_member) {
                                         
@@ -715,7 +716,7 @@ namespace hartebeest {
 
                                         int received;
 
-                                        received = read(arg_sock_client_fd, arg_member.buf + arg_member.recv_sz, BUFFER_SIZE - arg_member.recv_sz);
+                                        received = read(arg_member.fd, arg_member.buf + arg_member.recv_sz, BUFFER_SIZE - arg_member.recv_sz);
                                         arg_member.recv_sz += received;
 
 #ifdef LOG_ENABLED
@@ -736,11 +737,12 @@ namespace hartebeest {
                                             
                                             arg_member.rdma_info        = parsed;
                                             arg_member.state            = STATE_FILLED;
-                                            arg_member.fd               = arg_sock_client_fd;
                                             arg_member.sockaddr_info    = arg_cli_sockaddr;
 
                                             delete[] arg_member.buf;
                                             arg_member.buf              = nullptr;
+
+                                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, arg_member.fd, &ev);
                                         } 
                                         catch (...) {
                                             member_guard.at(arg_member.node_id).unlock();
@@ -750,7 +752,7 @@ namespace hartebeest {
                                         member_guard.at(arg_member.node_id).unlock();
                                         return 0;
                                     },
-                                    sock_client_fd, client_sockaddr, std::ref(member) // arguments
+                                    client_sockaddr, std::ref(member) // arguments
                                 );
 
                                 // worker_t.detach();      // Run in the background
