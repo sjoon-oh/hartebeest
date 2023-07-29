@@ -6,35 +6,62 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_VERBOSE_MAKEFILE true)
 
 include_directories(${CMAKE_SOURCE_DIR}/extern)
 
-# Test Target
-set(DEMO_TARGET demo.run)
-set(LIB_HARTEBEEST libhartebeest)
+message("Processing HARTEBEEST CMakeLists.txt")
 
-# Demo
+message("-- HARTEBEEST Library --")
+set(hartebeest_lib      hartebeest)
+file(GLOB hartebeest_lib_src 
+    CONFIGURE_DEPENDS 
+    ${CMAKE_SOURCE_DIR}/src/*.c
+    ${CMAKE_SOURCE_DIR}/src/*.cc 
+    ${CMAKE_SOURCE_DIR}/includes/*.hh)
+
+add_library(${hartebeest_lib} SHARED ${hartebeest_lib_src})
+
+set_target_properties(
+    ${hartebeest_lib} 
+    PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/lib
+)
+target_link_libraries(${hartebeest_lib} PUBLIC ibverbs pthread)
+
+#
+# Test Binaries
+message("-- HARTEBEEST Test Binaries --")
+set(hartebeest_demo     run-demo)
 add_executable(
-    ${DEMO_TARGET}
-    ${CMAKE_SOURCE_DIR}/test/demo2.cpp 
+    ${hartebeest_demo}
+    ${CMAKE_SOURCE_DIR}/test/demo.cc
 )
 set_target_properties(
-    ${DEMO_TARGET} 
-    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build
+    ${hartebeest_demo} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
 )
+target_link_libraries(${hartebeest_demo} PUBLIC ${hartebeest_lib})
 
-# Lib
-add_library(
-    ${LIB_HARTEBEEST} SHARED ${CMAKE_SOURCE_DIR}/src/rdma-conf.cpp
+
+set(configurator_test     config-test)
+add_executable(
+    ${configurator_test}
+    ${CMAKE_SOURCE_DIR}/test/config-test.cc
 )
 set_target_properties(
-    ${LIB_HARTEBEEST} 
-    PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build
+    ${configurator_test} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
 )
-target_compile_options(
-    ${LIB_HARTEBEEST} PRIVATE -Wall -Werror
-)
+target_link_libraries(${configurator_test} PUBLIC ${hartebeest_lib})
 
-# Essentials
-target_link_libraries(${DEMO_TARGET}        PUBLIC ibverbs pthread)
-target_link_libraries(${LIB_HARTEBEEST}     PUBLIC ibverbs pthread)
+
+set(allocator_test     alloc-test)
+add_executable(
+    ${allocator_test}
+    ${CMAKE_SOURCE_DIR}/test/alloc-test.cc
+)
+set_target_properties(
+    ${allocator_test} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
+)
+target_link_libraries(${allocator_test} PUBLIC ${hartebeest_lib})

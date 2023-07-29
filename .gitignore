@@ -1,0 +1,9 @@
+# CMake Related
+CMakeFiles
+cmake_install.cmake
+CMakeCache.txt
+# *.json
+
+build
+
+.vscode
