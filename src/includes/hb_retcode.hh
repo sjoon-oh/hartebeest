@@ -43,6 +43,11 @@ namespace hartebeest {
         QP_TRANSITION_2_INIT_OK                 ,       // 24
         QP_TRANSITION_2_INIT_ERR                ,       // 25
 
+        MEMCH_SET_OK                            ,       // 26
+        MEMCH_SET_ERR                           ,       // 27
+        MEMCH_GET_OK                            ,       // 28
+        MEMCH_GET_ERR                           ,       // 29
+
         COMPOUND                                // x
     };
 

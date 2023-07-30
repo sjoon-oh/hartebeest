@@ -78,12 +78,13 @@ hartebeest::ConfigLoader::ConfigLoader(const char* path) {
 
 hb_retcode hartebeest::ConfigLoader::init_sysvars() {
 
+    HB_CLOGGER->info("Initializing envvars...");
     for (int i = 0; i < MAX_ENVVARS; i++) {
         system_vars[i].val = getenv(system_vars[i].varname);        
         if (system_vars[i].val == NULL)
             return hb_retcode(CFGLDR_RETCODE_ENVVAR_NOT_FOUND);
         
-        HB_CLOGGER->info("Caching envs: {}={}", system_vars[i].varname, system_vars[i].val);
+        HB_CLOGGER->info("{}={}", system_vars[i].varname, system_vars[i].val);
         sysvar_cache.insert(
             std::pair<std::string, char*>(std::string(system_vars[i].varname), system_vars[i].val)
         );
@@ -94,6 +95,7 @@ hb_retcode hartebeest::ConfigLoader::init_sysvars() {
 
 hb_retcode hartebeest::ConfigLoader::init_params() {
 
+    HB_CLOGGER->info("Initializing paramters...");
     nlohmann::json cfgs;
     std::ifstream conf_file(fname);
 

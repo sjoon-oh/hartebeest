@@ -42,6 +42,11 @@ namespace hartebeest {
         
         "QP: TRANSITION TO INIT OK"             ,   // 24
         "QP: TRANSITION TO INIT ERROR"          ,   // 25
+
+        "MEMCACHED: SET OK"                     ,   // 26
+        "MEMCACHED: SET FAILED"                 ,   // 27
+        "MEMCACHED: GET OK"                     ,   // 28
+        "MEMCACHED: GET FAILED"                 ,   // 29
         
         "COMPOUND"                                  // x
     };

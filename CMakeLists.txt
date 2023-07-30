@@ -26,7 +26,7 @@ set_target_properties(
     ${hartebeest_lib} 
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/lib
 )
-target_link_libraries(${hartebeest_lib} PUBLIC ibverbs pthread)
+target_link_libraries(${hartebeest_lib} PUBLIC ibverbs pthread memcached)
 
 #
 # Test Binaries
@@ -65,3 +65,27 @@ set_target_properties(
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
 )
 target_link_libraries(${allocator_test} PUBLIC ${hartebeest_lib})
+
+
+set(core_test     core-test)
+add_executable(
+    ${core_test}
+    ${CMAKE_SOURCE_DIR}/test/core-test.cc
+)
+set_target_properties(
+    ${core_test} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
+)
+target_link_libraries(${core_test} PUBLIC ${hartebeest_lib})
+
+
+set(memc_test     memc-test)
+add_executable(
+    ${memc_test}
+    ${CMAKE_SOURCE_DIR}/test/memc-test.cc
+)
+set_target_properties(
+    ${memc_test} 
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/bin
+)
+target_link_libraries(${memc_test} PUBLIC ${hartebeest_lib})

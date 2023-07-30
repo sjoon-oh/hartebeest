@@ -61,3 +61,5 @@ namespace hartebeest {
         Hca& get_hca(int);
     };
 }
+
+#define HB_HCA_INITR    hartebeest::HcaInitializer::get_instance()
