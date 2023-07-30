@@ -29,7 +29,7 @@ void hartebeest::HartebeestCore::init() {
         ;
 }
 
-bool hartebeest::HartebeestCore::create_pd(const char* pd_key) {
+bool hartebeest::HartebeestCore::create_local_pd(const char* pd_key) {
 
     HB_CLOGGER->info("Creating protection domain: {}", pd_key);
     hartebeest::Pd* new_pd = new hartebeest::Pd(
@@ -44,7 +44,7 @@ bool hartebeest::HartebeestCore::create_pd(const char* pd_key) {
     return false;
 }
 
-bool hartebeest::HartebeestCore::create_mr(const char* pd_key, const char* mr_key, size_t buflen, int rights) {
+bool hartebeest::HartebeestCore::create_local_mr(const char* pd_key, const char* mr_key, size_t buflen, int rights) {
 
     HB_CLOGGER->info("Creating memory region: {}, to {}", mr_key, pd_key);
     hartebeest::Pd* registered_pd = HB_PD_CACHE.get_resrc(pd_key);
@@ -57,4 +57,58 @@ bool hartebeest::HartebeestCore::create_mr(const char* pd_key, const char* mr_ke
         return true;
     
     return false;
+}
+
+bool hartebeest::HartebeestCore::create_basiccq(const char* cq_key) {
+
+    HB_CLOGGER->info("Creating basic completion queue: {}, to {}", cq_key);
+    hartebeest::BasicCq* new_basiccq = new hartebeest::BasicCq(
+        cq_key, 
+        HB_HCA_INITR.get_hca(hca_idx));
+
+    HB_BASICCQ_CACHE.register_resrc(cq_key, new_basiccq);
+}
+
+
+
+
+
+
+hartebeest::Pd* hartebeest::HartebeestCore::get_local_pd(const char* pd_key) {
+    return HB_PD_CACHE.get_resrc(pd_key);
+}
+
+hartebeest::Mr* hartebeest::HartebeestCore::get_local_mr(const char* pd_key, const char* mr_key) {
+    return HB_PD_CACHE.get_resrc(pd_key)->get_mr_cache().get_resrc(mr_key);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Debugs
+void hartebeest::HartebeestCore::pd_status() {
+    HB_PD_CACHE.out_cache_status();
+}
+
+void hartebeest::HartebeestCore::mr_status(const char* pd_key) {
+    HB_PD_CACHE.get_resrc(pd_key)->get_mr_cache().out_cache_status();
+}
+
+void hartebeest::HartebeestCore::cq_status() {
+    HB_BASICCQ_CACHE.out_cache_status();
+}
+
+void hartebeest::HartebeestCore::qp_status(const char* pd_key) {
+    HB_PD_CACHE.get_resrc(pd_key)->get_qp_cache().out_cache_status();
 }

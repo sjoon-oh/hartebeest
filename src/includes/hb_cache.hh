@@ -104,6 +104,6 @@ void hartebeest::ResourceCache<T>::out_cache_status() {
     uintptr_t ptr;
     for (auto& it: resrc_cache) {
         ptr = reinterpret_cast<uintptr_t>(it.second);
-        HB_CLOGGER->info("Status {} <{}, {:x}>", name, it.first, ptr);
+        HB_CLOGGER->info("Status {} <{}, 0x{:x}>", name, it.first, ptr);
     }
 }

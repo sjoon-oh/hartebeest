@@ -4,6 +4,8 @@
  */
 
 #include <cassert>
+#include <string>
+#include <sstream>
 
 #include "./includes/hb_alloc.hh"
 #include "./includes/hb_mrs.hh"
@@ -52,4 +54,18 @@ struct ibv_mr* hartebeest::Mr::get_mr() const {
 
 void hartebeest::Mr::set_mr(struct ibv_mr* ptr) {
     mr = ptr;
+}
+
+std::string hartebeest::Mr::flatten_mr() {
+    std::ostringstream stream;
+
+    assert(mr != nullptr);
+    stream 
+        << name << ":"
+        << std::hex << reinterpret_cast<uintptr_t>(mr->addr) << ":"
+        << mr->length << ":"
+        << mr->lkey << ":"
+        << mr->rkey;
+
+    return stream.str();
 }

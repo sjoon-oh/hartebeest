@@ -33,5 +33,7 @@ namespace hartebeest {
         struct ibv_mr* get_mr() const;
 
         void set_mr(struct ibv_mr*);
+
+        std::string flatten_mr();
     };
 }
