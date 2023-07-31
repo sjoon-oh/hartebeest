@@ -10,43 +10,52 @@
 namespace hartebeest {
     
     const char* hb_retcstr[] = {
-        "UNDEFINED"                             ,   // 0
+        "UNDEFINED"                             ,
 
-        "HCA: DEVICE RESET OK"                  ,   // 1
-        "HCA: DEVICE RESET ERROR"               ,   // 2
-        "HCA: DEVICE OPEN OK"                   ,   // 3
-        "HCA: DEVICE OPEN ERROR"                ,   // 4
-        "HCA: DEVICE REGISTER OK"               ,   // 5
+        "HCA: DEVICE RESET OK"                  ,
+        "HCA: DEVICE RESET ERROR"               ,
+        "HCA: DEVICE OPEN OK"                   ,
+        "HCA: DEVICE OPEN ERROR"                ,
+        "HCA: DEVICE REGISTER OK"               ,
 
-        "HCAINITR: DEVICE OPEN OK"              ,   // 6
-        "HCAINITR: DEVICE LIST RANGE ERROR"     ,   // 7
-        "HCAINITR: NO DEVICE FOUND ERROR"       ,   // 8
-        "HCAINITR: NO HCA CONTEXT FOUND ERROR"  ,   // 9
-        "HCAINITR: PORT QUERY ERROR"            ,   // 10
-        "HCAINITR: NOT INFINIBAND LAYER"        ,   // 11
-        "HCAINITR: PORT BINDING OK"             ,   // 12
+        "HCAINITR: DEVICE OPEN OK"              ,
+        "HCAINITR: DEVICE LIST RANGE ERROR"     ,
+        "HCAINITR: NO DEVICE FOUND ERROR"       ,
+        "HCAINITR: NO HCA CONTEXT FOUND ERROR"  ,
+        "HCAINITR: PORT QUERY ERROR"            ,
+        "HCAINITR: NOT INFINIBAND LAYER"        ,
+        "HCAINITR: PORT BINDING OK"             ,
 
-        "CACHE: ALREADY REGISTERD"              ,   // 13
-        "CACHE: RESRC NOT FOUND"                ,   // 14 
-        "CACHE: REGISTERED OK"                  ,   // 15
+        "CACHE: ALREADY REGISTERD"              ,
+        "CACHE: RESRC NOT FOUND"                ,
+        "CACHE: REGISTERED OK"                  ,
         
-        "PD: MR CREATE ERROR"                   ,   // 16
-        "PD: MR CRATE OK"                       ,   // 17
-        "PD: ib_reg_mr ERROR"                   ,   // 18
+        "PD: MR CREATE ERROR"                   ,
+        "PD: MR CRATE OK"                       ,
+        "PD: ib_reg_mr ERROR"                   ,
+        "PD: QP CREATE ERROR"                   ,
+        "PD: QP CREATE OK"                      ,
 
-        "CFGLDR: CONFIGURATION FILE NOT FOUND"  ,   // 19
-        "CFGLDR: ENVVAR NOT FOUND"              ,   // 20
-        "CFGLDR: GENERAL OK"                    ,   // 21
-        "CFGLDR: JSON PARSER THROW"             ,   // 22
-        "CFGLDR: KEY NOT FOUND"                 ,   // 23
+        "CFGLDR: CONFIGURATION FILE NOT FOUND"  ,
+        "CFGLDR: ENVVAR NOT FOUND"              ,
+        "CFGLDR: GENERAL OK"                    ,
+        "CFGLDR: JSON PARSER THROW"             ,
+        "CFGLDR: KEY NOT FOUND"                 ,
         
-        "QP: TRANSITION TO INIT OK"             ,   // 24
-        "QP: TRANSITION TO INIT ERROR"          ,   // 25
+        "QP: TRANSITION TO INIT OK"             ,
+        "QP: TRANSITION TO INIT ERROR"          ,
+        "QP: TRANSITION TO RTR OK"              ,
+        "QP: TRANSITION TO RTR ERROR"           ,
+        "QP: TRANSITION TO RTS OK"              ,
+        "QP: TRANSITION TO RTS ERROR"           ,
 
-        "MEMCACHED: SET OK"                     ,   // 26
-        "MEMCACHED: SET FAILED"                 ,   // 27
-        "MEMCACHED: GET OK"                     ,   // 28
-        "MEMCACHED: GET FAILED"                 ,   // 29
+
+        "MEMCACHED: SET OK"                     ,
+        "MEMCACHED: SET FAILED"                 ,
+        "MEMCACHED: GET OK"                     ,
+        "MEMCACHED: GET FAILED"                 ,
+        "MEMCACHED: DEL OK"                     ,
+        "MEMCACHED: DEL FAILED"                 ,
         
         "COMPOUND"                                  // x
     };

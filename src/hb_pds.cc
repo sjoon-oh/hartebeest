@@ -25,10 +25,10 @@ hartebeest::Pd::Pd(const char* name, hartebeest::Hca& hca_dev) {
 hartebeest::Pd::~Pd() {
     
     // Delete Allocated MRs 
-    for (auto it: mr_cache.get_resrc_cache())
+    for (auto it: mr_cache.get_resrc_map())
         delete it.second;
 
-    for (auto it: qp_cache.get_resrc_cache())
+    for (auto it: qp_cache.get_resrc_map())
         delete it.second;
     
     if (pd != nullptr)
@@ -78,12 +78,12 @@ hb_retcode hartebeest::Pd::create_qp(const char* qp_name, struct ibv_cq* sq, str
     hb_retcode ret = qp_cache.register_resrc(qp_name, new_qp);
 
     if (ret.ret_code != CACHE_RETCODE_REGISTER_OK) {
-        ret.append_str(PD_RETCODE_CREATE_MR_ERR);
-        ret.ret_code = PD_RETCODE_CREATE_MR_ERR;
+        ret.append_str(PD_RETCODE_CREATE_QP_ERR);
+        ret.ret_code = PD_RETCODE_CREATE_QP_ERR;
     }
     else {
-        ret.append_str(PD_RETCODE_CREATE_MR_OK);
-        ret.ret_code = PD_RETCODE_CREATE_MR_OK;
+        ret.append_str(PD_RETCODE_CREATE_QP_OK);
+        ret.ret_code = PD_RETCODE_CREATE_QP_OK;
     }
 
     return ret;

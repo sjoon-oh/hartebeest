@@ -44,6 +44,7 @@ namespace hartebeest {
     struct ConfPair pdef_qp_attr[] = {
         {"path_mtu", IBV_MTU_4096},
         {"rq_psn", 3185},
+        {"sq_psn", 3185},
         {"ah_attr.is_global", 0},
         {"ah_attr.sl", 0},
         {"ah_attr.src_path_bits", 0},

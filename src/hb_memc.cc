@@ -132,3 +132,23 @@ hb_retcode hartebeest::Exchanger::prefix_set(const char* key, const int pref_idx
 hb_retcode hartebeest::Exchanger::prefix_get(const char* key, const int pref_idx, std::string& ret) {
     return this->get(make_key(pref_idx, key).c_str(), ret);
 };
+
+hb_retcode hartebeest::Exchanger::del(const char* key) {
+    assert(memc_serv_hdl != nullptr);
+
+    memcached_return_t memc_ret;
+    size_t vallen_ret;
+    uint32_t flags_ret;
+
+    memc_ret = memcached_delete(
+        memc_serv_hdl, 
+        key, std::strlen(key), static_cast<time_t>(0)
+    );
+
+    if (memc_ret != MEMCACHED_SUCCESS) {
+        HB_CLOGGER->warn("Memcached DELETE <{}, ?> failed", key);
+        return hb_retcode(MEMCH_DEL_ERR);
+    }
+
+    return hb_retcode(MEMCH_DEL_OK);
+}

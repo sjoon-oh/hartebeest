@@ -55,7 +55,7 @@ namespace hartebeest {
         }
 
         hb_retcode open_device(int);
-        hb_retcode bind_port(int);
+        hb_retcode bind_port(int, uint8_t);
 
         const int get_n_hca_devs() const;
         Hca& get_hca(int);

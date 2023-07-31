@@ -6,6 +6,9 @@
 #include <cassert>
 #include <string>
 #include <sstream>
+#include <cstdlib>
+
+#include <infiniband/verbs.h> // OFED IB verbs
 
 #include "./includes/hb_alloc.hh"
 #include "./includes/hb_mrs.hh"
@@ -13,15 +16,19 @@
 hartebeest::Mr::Mr(size_t len) {
     name = std::string("ANONYMOUS-MR");
 
-    buffer = hartebeest::alloc_buffer(len, 64);
-    assert(buffer != nullptr);
+    if (len > 0) {
+        buffer = hartebeest::alloc_buffer(len, 64);
+        assert(buffer != nullptr);
+
+        type = hartebeest::MR_TYPE_LOCAL;
+    }
+    else {
+        type = hartebeest::MR_TYPE_UNKNOWN;
+    }
 }
 
-hartebeest::Mr::Mr(const char* key, size_t len) {
+hartebeest::Mr::Mr(const char* key, size_t len) : Mr(len) {
     name = std::string(key);
-
-    buffer = hartebeest::alloc_buffer(len, 64);
-    assert(buffer != nullptr);
 }
 
 hartebeest::Mr::~Mr() {
@@ -56,7 +63,11 @@ void hartebeest::Mr::set_mr(struct ibv_mr* ptr) {
     mr = ptr;
 }
 
-std::string hartebeest::Mr::flatten_mr() {
+void hartebeest::Mr::set_type(enum hartebeest::MrType mr_type) {
+    type = mr_type;
+}
+
+std::string hartebeest::Mr::flatten_info() {
     std::ostringstream stream;
 
     assert(mr != nullptr);
@@ -68,4 +79,27 @@ std::string hartebeest::Mr::flatten_mr() {
         << mr->rkey;
 
     return stream.str();
+}
+
+void hartebeest::Mr::unflatten_info(const char* fetch) {
+    assert(is_allocated() == false);
+
+    std::string imported(fetch);
+
+    std::replace(imported.begin(), imported.end(), ':', ' ');
+    std::stringstream stream(imported);
+    
+    mr = reinterpret_cast<struct ibv_mr*>(std::malloc(sizeof(struct ibv_mr)));
+    std::memset(mr, 0, sizeof(struct ibv_mr));
+
+    uintptr_t buf_addr;
+
+    stream >> name;
+    stream >> std::hex >> buf_addr;
+    stream >> std::hex >> mr->length;
+    stream >> std::hex >> mr->lkey;
+    stream >> std::hex >> mr->rkey;
+
+    mr->addr = reinterpret_cast<void*>(buf_addr);
+    buffer = reinterpret_cast<uint8_t*>(buf_addr);
 }

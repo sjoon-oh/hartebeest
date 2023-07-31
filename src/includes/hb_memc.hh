@@ -54,6 +54,8 @@ namespace hartebeest {
         hb_retcode prefix_set(const char*, const int, const char*);
         hb_retcode prefix_get(const char*, const int, std::string&);
 
+        hb_retcode del(const char*);
+
         static Exchanger& get_instance() {
             static Exchanger exchgr;
             return exchgr;

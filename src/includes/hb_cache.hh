@@ -34,7 +34,7 @@ namespace hartebeest {
         const char* get_name() const;
 
         T* get_resrc(const char*);
-        std::map<std::string, T*>& get_resrc_cache();
+        std::map<std::string, T*>& get_resrc_map();
 
         // For debug
         void out_cache_status();
@@ -94,7 +94,7 @@ T* hartebeest::ResourceCache<T>::get_resrc(const char* key) {
 }
 
 template <class T>
-std::map<std::string, T*>& hartebeest::ResourceCache<T>::get_resrc_cache() {
+std::map<std::string, T*>& hartebeest::ResourceCache<T>::get_resrc_map() {
     return this->resrc_cache;
 }
 

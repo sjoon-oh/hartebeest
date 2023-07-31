@@ -35,7 +35,7 @@ int main() {
         retcode = hartebeest::HcaInitializer::get_instance().open_device(default_hca_idx);
     HB_CLOGGER->info("{}", retcode.aux_str);
     
-    retcode = hartebeest::HcaInitializer::get_instance().bind_port(0);
+    retcode = hartebeest::HcaInitializer::get_instance().bind_port(0, 1);
     HB_CLOGGER->info("{}", retcode.aux_str);
     // hartebeest::PdCache::get_instance();
 

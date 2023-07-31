@@ -23,38 +23,72 @@
 
 namespace hartebeest {
 
+    struct RequestMr {
+        const char* mr_key;
+        uint64_t offset;
+        size_t len;
+    };
+
     // Funcs
     class HartebeestCore {
     private:
+        int nid;
         int hca_idx;
-    
+
+        // Manages remote resources.
+        ResourceCache<Mr> remote_mr_cache;
+        ResourceCache<Qp> remote_qp_cache;
+        
     public:
-        HartebeestCore(int = 0);
+        HartebeestCore(int = 0, uint8_t = 1);
         ~HartebeestCore();
 
         bool validation_test();
+        
+        bool memc_push_general(const char*);
+        bool memc_del_general(const char*);
+
 
         void init();
 
         bool create_local_pd(const char*);
         void destroy_pd();
 
+        // MR interfaces
         bool create_local_mr(const char*, const char*, size_t, int);
-        void destroy_mr();
+        bool memc_push_local_mr(const char*, const char*, const char*);
+        bool memc_fetch_remote_mr(const char*);
 
         bool create_basiccq(const char*);
         void destroy_basiccq();
 
-        bool is_pd_exist(const char*);
-        bool is_mr_exist(const char*, const char*);
-        bool is_cq_exist(const char*);
-        bool is_qp_exist(const char*, const char*);
+        bool create_local_qp(const char*, const char*, const char*, const char*);
+        bool init_local_qp(const char*, const char*);
+        bool connect_local_qp(const char*, const char*, const char*);
+        bool memc_push_local_qp(const char*, const char*, const char*);
+        bool memc_fetch_remote_qp(const char*);
+
+        bool rdma_post_template(const char*, const char*, struct RequestMr, struct RequestMr, enum ibv_wr_opcode);
+        bool rdma_post_fast(struct ibv_qp*, void*, void*, size_t, enum ibv_wr_opcode, uint32_t, uint32_t);
+
+        bool rdma_poll(const char*);
+        
+        // bool is_pd_exist(const char*);
+        // bool is_mr_exist(const char*, const char*, const char*);
+        // bool is_cq_exist(const char*);
+        // bool is_qp_exist(const char*, const char*);
 
         // Access 
         Pd* get_local_pd(const char*);
         Mr* get_local_mr(const char*, const char*);
-        BasicCq get_local_basiccq(const char*);
+        BasicCq* get_local_basiccq(const char*);
         Qp* get_local_qp(const char*, const char*);
+
+        Mr* get_remote_mr(const char*);
+        Qp* get_remote_qp(const char*);
+
+        char* get_sysvar(const char*);
+        int get_nid();
 
         // Debug
         void pd_status();

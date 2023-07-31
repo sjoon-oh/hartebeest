@@ -4,6 +4,8 @@
  */
 
 #include <cassert>
+#include <iostream>
+#include <cstdio>
 
 #include <cstdint>
 #include <infiniband/verbs.h>
@@ -92,7 +94,7 @@ hb_retcode hartebeest::HcaInitializer::open_device(int idx) {
     return hca_vec.at(idx).device_open();
 }
 
-hb_retcode hartebeest::HcaInitializer::bind_port(int idx) {
+hb_retcode hartebeest::HcaInitializer::bind_port(int idx, uint8_t port_num) {
 
     hartebeest::Hca& hca_dev = hca_vec.at(idx);
 
@@ -102,37 +104,25 @@ hb_retcode hartebeest::HcaInitializer::bind_port(int idx) {
     if (hca_dev.get_device_ctx() == nullptr)
         return hb_retcode(HCAINITR_RETCODE_RANGE_ERR);
 
-    // How many physical ports in this device?
     uint8_t n_hca_ports = hca_dev.get_device_attr().phys_port_cnt;
-    for (int port = 1; port <= n_hca_ports; port++) {
-        
-        struct ibv_port_attr port_attr;
-        std::memset(&port_attr, 0, sizeof(ibv_port_attr));
 
-        if (ibv_query_port(hca_dev.get_device_ctx(), port, &port_attr))
-            return hb_retcode(HCAINITR_RETCODE_PORT_QUERY_ERR);
+    struct ibv_port_attr port_attr;
+    std::memset(&port_attr, 0, sizeof(ibv_port_attr));
+    if (ibv_query_port(hca_dev.get_device_ctx(), port_num, &port_attr))
+        return hb_retcode(HCAINITR_RETCODE_PORT_QUERY_ERR);
 
-        if (port_attr.phys_state != IBV_PORT_ACTIVE &&
-            port_attr.phys_state != IBV_PORT_ACTIVE_DEFER) {
-            continue;
-        }
-
-        size_t skipped_active_ports = 0;
-        if (skipped_active_ports == idx) {
-            
-            if (port_attr.link_layer != IBV_LINK_LAYER_INFINIBAND) 
-                return hb_retcode(HCAINITR_RETCODE_NO_IB);
-
-            hca_dev.set_device_pid(port);
-            hca_dev.set_device_plid(port_attr.lid);
-
-            return hb_retcode(HCAINITR_RETCODE_BIND_PORT_OK);
-        }
-
-        skipped_active_ports += 1;
+    if (port_attr.phys_state != IBV_PORT_ACTIVE &&
+        port_attr.phys_state != IBV_PORT_ACTIVE_DEFER) {
+        hb_retcode(HCAINITR_RETCODE_PORT_QUERY_ERR);
     }
 
-    return hb_retcode();
+    if (port_attr.link_layer != IBV_LINK_LAYER_INFINIBAND) 
+        return hb_retcode(HCAINITR_RETCODE_NO_IB);
+
+    hca_dev.set_device_pid(port_num);
+    hca_dev.set_device_plid(port_attr.lid);
+
+    return hb_retcode(HCAINITR_RETCODE_BIND_PORT_OK);
 }
 
 const int hartebeest::HcaInitializer::get_n_hca_devs() const {

@@ -14,9 +14,17 @@
 
 namespace hartebeest {
 
+    enum MrType {
+        MR_TYPE_UNKNOWN,
+        MR_TYPE_LOCAL,
+        MR_TYPE_REMOTE
+    };
+
     class Mr {
     private:
         std::string name;
+        enum MrType type = MR_TYPE_LOCAL;
+
         uint8_t* buffer = nullptr;
         struct ibv_mr* mr = nullptr;
 
@@ -33,7 +41,9 @@ namespace hartebeest {
         struct ibv_mr* get_mr() const;
 
         void set_mr(struct ibv_mr*);
+        void set_type(enum MrType);
 
-        std::string flatten_mr();
+        std::string flatten_info();
+        void unflatten_info(const char*);
     };
 }

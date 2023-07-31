@@ -3,6 +3,8 @@
  * configurator test
  */
 
+#include <string>
+
 #include <cstring>
 #include <iostream>
 
@@ -10,31 +12,158 @@
 #include "../src/includes/hartebeest.hh"
 
 int main() {
-    
+
     HARTEBEEST_CORE_HDL.init();
+    int node_id = HARTEBEEST_CORE_HDL.get_nid();
     
-    HARTEBEEST_CORE_HDL.create_local_pd("hartebeest-pd-1");
+    HB_CLOGGER->info("Node ID: {}", node_id);
+
+    std::string global_pd_name = "newcons-pd-0";
+    std::string global_mr_name = "newcons-mr-0";
+    std::string global_qp_name = "newcons-qp-0";
+    
+    std::string other_mr_name = "newcons-mr-1";
+    std::string other_qp_name = "newcons-qp-1";
+
+    if (node_id == 1) {
+        global_pd_name = "newcons-pd-1";
+        global_mr_name = "newcons-mr-1";
+        global_qp_name = "newcons-qp-1";
+
+        other_mr_name = "newcons-mr-0";
+        other_qp_name = "newcons-qp-0";
+    }
+
+    HARTEBEEST_CORE_HDL.create_local_pd(global_pd_name.c_str());;
 
     // Register the MR to PD name
-    HARTEBEEST_CORE_HDL.create_local_mr("hartebeest-pd-1", "mr-1", 8192, 0);
-    HARTEBEEST_CORE_HDL.create_local_mr("hartebeest-pd-1", "mr-2", 8192, 0);
+    HARTEBEEST_CORE_HDL.create_local_mr(global_pd_name.c_str(), global_mr_name.c_str(), 8192, 
+        0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
+    );
 
     // Create QP
     // HARTEBEEST_CORE_HDL.create_cq();
-    HARTEBEEST_CORE_HDL.pd_status();
-    HARTEBEEST_CORE_HDL.mr_status("hartebeest-pd-1");
+    // {
+    //     HARTEBEEST_CORE_HDL.pd_status();
+    //     HARTEBEEST_CORE_HDL.mr_status("newcons-pd-1");
 
-    HARTEBEEST_CORE_HDL.cq_status();
-    HARTEBEEST_CORE_HDL.qp_status("hartebeest-pd-1");
+    //     HARTEBEEST_CORE_HDL.cq_status();
+    //     HARTEBEEST_CORE_HDL.qp_status("newcons-pd-1");
+    // }
 
-    hartebeest::Mr* local_mr_1 = nullptr;
-    local_mr_1 = HARTEBEEST_CORE_HDL.get_local_mr("hartebeest-pd-1", "mr-1");
+    // hartebeest::Mr* local_mr_1 = nullptr;
+    // local_mr_1 = HARTEBEEST_CORE_HDL.get_local_mr("newcons-pd-1", "newcons-mr-1");
 
-    HARTEBEEST_MEMC_HDL.prefix_set("mr-1-node0", hartebeest::HB_MEMC_KEY_PREF_MRINFO, local_mr_1->flatten_mr().c_str());
+    HARTEBEEST_CORE_HDL.memc_push_local_mr(
+        global_mr_name.c_str(), global_pd_name.c_str(), global_mr_name.c_str()
+    );
     
+    HARTEBEEST_CORE_HDL.memc_fetch_remote_mr(other_mr_name.c_str());
+
+    // HB_CLOGGER->info("Fetched flatten MR: {}", result);
+
+    HARTEBEEST_CORE_HDL.create_basiccq("newcons-basiccq-1");
+    HARTEBEEST_CORE_HDL.create_basiccq("newcons-basiccq-2");
+
+    HARTEBEEST_CORE_HDL.create_local_qp(
+        global_pd_name.c_str(), global_qp_name.c_str(), "newcons-basiccq-1", "newcons-basiccq-2"
+    );
+
+    // HARTEBEEST_CORE_HDL.get_local_qp(
+    //     global_pd_name.c_str(), 
+    //     global_qp_name.c_str())->transit_init();
+    HARTEBEEST_CORE_HDL.init_local_qp(
+        global_pd_name.c_str(),
+        global_qp_name.c_str()
+    );
+
+    HARTEBEEST_CORE_HDL.memc_push_local_qp(
+        global_qp_name.c_str(), global_pd_name.c_str(), global_qp_name.c_str());
+
+    HARTEBEEST_CORE_HDL.memc_fetch_remote_qp(other_qp_name.c_str());
+
+    HARTEBEEST_CORE_HDL.connect_local_qp(
+        global_pd_name.c_str(),
+        global_qp_name.c_str(),
+        other_qp_name.c_str()
+    );
 
 
 
+
+    if (node_id == 0) {
+
+        // auto local_mr = HARTEBEEST_CORE_HDL.get_local_mr(
+        //         global_pd_name.c_str(),
+        //         global_mr_name.c_str()
+        //     )->get_mr();
+
+        // auto remote_mr = HARTEBEEST_CORE_HDL
+        // struct ibv_qp* local_qp, void* local_addr, void* remote_addr, size_t len, 
+        // enum ibv_wr_opcode opcode, uint32_t lkey, uint32_t rkey
+        auto local_qp = HARTEBEEST_CORE_HDL.get_local_qp(
+                global_pd_name.c_str(),
+                global_qp_name.c_str()
+        )->get_qp();
+        auto local_mr = HARTEBEEST_CORE_HDL.get_local_mr(
+                global_pd_name.c_str(),
+                global_mr_name.c_str()
+            )->get_mr();
+        auto remote_mr = HARTEBEEST_CORE_HDL.get_remote_mr(
+            other_mr_name.c_str()
+        )->get_mr();
+
+        printf("Remote addr: %p\n", remote_mr->addr);
+
+        sleep(3);
+
+        char* target = reinterpret_cast<char*>(local_mr->addr);
+        char* source_str = "asdfasdfasdfafdsfadsafdsafdsfadsa";
+        std::memcpy(
+            target,
+            source_str,
+            std::strlen(source_str)
+        );
+        // *target = 98;
+        size_t buflen = std::strlen(source_str);
+
+        HARTEBEEST_CORE_HDL.rdma_post_fast(
+            local_qp, local_mr->addr, remote_mr->addr, buflen, IBV_WR_RDMA_WRITE, local_mr->lkey, remote_mr->rkey
+        );
+
+        HARTEBEEST_CORE_HDL.rdma_poll(
+            "newcons-basiccq-1"
+        );
+
+
+    }
+    else {
+        char* written = reinterpret_cast<char*>(HARTEBEEST_CORE_HDL.get_local_mr(global_pd_name.c_str(), global_mr_name.c_str())->get_buffer());
+
+        printf("Addr: %p\n", written);
+        while (1) {
+            printf("%s", written);
+
+        }
+    }
+
+    // HARTEBEEST_CORE_HDL.memc_fetch_remote_mr("qp1-node0");
+
+    HB_CLOGGER->info("Test end.");
+
+    // result = "";
+    // HARTEBEEST_MEMC_HDL.prefix_get(
+    //     "qp1-node0", hartebeest::HB_MEMC_KEY_PREF_QPINFO,
+    //     result);
+    // HB_CLOGGER->info("Fetched flatten QP: {}", result);
+
+
+
+
+
+    // HARTEBEEST_CORE_HDL.
+
+    // Assuming to be remote
 
     return 0;
 }
