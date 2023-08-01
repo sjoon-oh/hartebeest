@@ -3,13 +3,12 @@
         "cq_depth": 128
     },
     "qp_init_attr": {
-        "qp_type": 2,
-        "cap.max_send_wr": 128,
-        "cap.max_send_sge": 16,
-        "cap.max_recv_sge": 16,
-        "cap.max_inline_data": 256
+        "rc:cap.max_send_wr": 128,
+        "rc:cap.max_send_sge": 16,
+        "rc:cap.max_recv_sge": 16,
+        "rc:cap.max_inline_data": 256
     },
     "qp_attr": {
-        "path_mtu": 5
+        "rc:path_mtu": 5
     }
 }

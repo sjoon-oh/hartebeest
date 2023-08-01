@@ -50,11 +50,11 @@ hartebeest::Exchanger::Exchanger() : MemcHandle() {
     assert(sysvar != nullptr);
     nid = std::string(sysvar);
 
-    sysvar = HB_CFG_LOADER.get_sysvar("HARTEBEEST_NPARTICIPANTS");
+    sysvar = HB_CFG_LOADER.get_sysvar("HARTEBEEST_PARTICIPANTS");
     assert(sysvar != nullptr);
-    n_players = std::string(sysvar);
+    participants = std::string(sysvar);
 
-    HB_CLOGGER->info("Exchanger: nid({}), n_players({})", nid, n_players);
+    HB_CLOGGER->info("Exchanger: nid({}), participants({})", nid, participants);
 
     sysvar = HB_CFG_LOADER.get_sysvar("HARTEBEEST_EXC_IP_PORT");
     assert(sysvar != nullptr);

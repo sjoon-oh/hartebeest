@@ -66,7 +66,7 @@ int main() {
     hartebeest_create_basiccq("recv-cq");
 
     hartebeest_create_local_qp(
-        this_node_pd_name, this_node_qp_name, "send-cq", "recv-cq"
+        this_node_pd_name, this_node_qp_name, IBV_QPT_RC, "send-cq", "recv-cq"
     );
 
     hartebeest_init_local_qp(this_node_pd_name, this_node_qp_name);

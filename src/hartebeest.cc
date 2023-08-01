@@ -160,10 +160,11 @@ bool hartebeest::HartebeestCore::create_basiccq(const char* cq_key) {
 }
 
 
-bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char* qp_key, const char* sendcq_key, const char* recvcq_key) {
+bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char* qp_key, enum ibv_qp_type conn_type, const char* sendcq_key, const char* recvcq_key) {
 
     HB_CLOGGER->info("Creating Queue Pair {}, to {}", qp_key, pd_key);
     hartebeest::Pd* registered_pd = HB_PD_CACHE.get_resrc(pd_key);
+
     assert(registered_pd != nullptr);
 
     struct ibv_cq* send_cq = HB_BASICCQ_CACHE.get_resrc(sendcq_key)->get_cq();
@@ -171,7 +172,7 @@ bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char*
 
     assert((send_cq != nullptr) && (recv_cq != nullptr));
 
-    hb_retcode hb_rc = registered_pd->create_qp(qp_key, send_cq, recv_cq);
+    hb_retcode hb_rc = registered_pd->create_qp(qp_key, conn_type, send_cq, recv_cq);
     HB_CLOGGER->info("{}", hb_rc.aux_str);
 
     if (hb_rc.ret_code == hartebeest::PD_RETCODE_CREATE_QP_OK)
@@ -235,7 +236,7 @@ bool hartebeest::HartebeestCore::memc_fetch_remote_qp(const char* remote_qp_key)
     while (HARTEBEEST_MEMC_HDL.get(remote_qp_key, fetched).ret_code != MEMCH_GET_OK)
         sleep(0.5);
 
-    hartebeest::Qp* remote_qp = new hartebeest::Qp(remote_qp_key, 0, 0, 0);
+    hartebeest::Qp* remote_qp = new hartebeest::Qp(remote_qp_key, IBV_QPT_RAW_PACKET, 0, 0, 0);
     remote_qp->unflatten_info(fetched.c_str());
     remote_qp_cache.register_resrc(remote_qp_key, remote_qp);
 
@@ -294,7 +295,7 @@ bool hartebeest::HartebeestCore::rdma_poll(const char* cq_key) {
     } while (nwc == 0);
 
     if (wc.status != IBV_WC_SUCCESS) {
-        HB_CLOGGER->warn("Expected IBV_WC_SUCCESS, but no");
+        HB_CLOGGER->warn("Expected IBV_WC_SUCCESS, but returned: {}", wc.status);
         return false;
     }
 

@@ -51,8 +51,8 @@ bool hartebeest_create_basiccq(const char* cq_key) {
     return HARTEBEEST_CORE_HDL.create_basiccq(cq_key);
 }
 
-bool hartebeest_create_local_qp(const char* pd_key,const char* qp_key, const char* sendcq_key, const char* recvcq_key) {
-    return HARTEBEEST_CORE_HDL.create_local_qp(pd_key, qp_key, sendcq_key, recvcq_key);
+bool hartebeest_create_local_qp(const char* pd_key,const char* qp_key, enum ibv_qp_type conn, const char* sendcq_key, const char* recvcq_key) {
+    return HARTEBEEST_CORE_HDL.create_local_qp(pd_key, qp_key, conn, sendcq_key, recvcq_key);
 }
 
 bool hartebeest_init_local_qp(const char* pd_key, const char* qp_key) {

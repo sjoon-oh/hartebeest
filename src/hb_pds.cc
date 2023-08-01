@@ -70,9 +70,9 @@ hb_retcode hartebeest::Pd::create_mr(const char* key, size_t len, int rights) {
     return ret;
 }
 
-hb_retcode hartebeest::Pd::create_qp(const char* qp_name, struct ibv_cq* sq, struct ibv_cq* rq) {
+hb_retcode hartebeest::Pd::create_qp(const char* qp_name, enum ibv_qp_type conn_type, struct ibv_cq* sq, struct ibv_cq* rq) {
     
-    hartebeest::Qp* new_qp = new hartebeest::Qp(qp_name, this, sq, rq);
+    hartebeest::Qp* new_qp = new hartebeest::Qp(qp_name, conn_type, this, sq, rq);
     assert(new_qp != nullptr);
 
     hb_retcode ret = qp_cache.register_resrc(qp_name, new_qp);

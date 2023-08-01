@@ -40,7 +40,7 @@ namespace hartebeest {
     class Exchanger : public MemcHandle {
     private:
         std::string nid;
-        std::string n_players;
+        std::string participants;
         // MemcHandle();
         // ~MemcHandle();
 

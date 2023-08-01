@@ -31,7 +31,7 @@ bool hartebeest_memc_fetch_remote_mr(const char*);
 
 bool hartebeest_create_basiccq(const char*);
 
-bool hartebeest_create_local_qp(const char*,const char*, const char*, const char*);
+bool hartebeest_create_local_qp(const char*, const char*, enum ibv_qp_type, const char*, const char*);
 bool hartebeest_init_local_qp(const char*, const char*);
 bool hartebeest_connect_local_qp(const char*, const char*, const char*);
 bool hartebeest_memc_push_local_qp(const char*, const char*, const char*);

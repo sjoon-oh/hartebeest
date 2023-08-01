@@ -45,7 +45,7 @@ namespace hartebeest {
         Hca* get_hca();
 
         hb_retcode create_mr(const char*, size_t, int);
-        hb_retcode create_qp(const char*, struct ibv_cq*, struct ibv_cq*);
+        hb_retcode create_qp(const char*, enum ibv_qp_type, struct ibv_cq*, struct ibv_cq*);
         
         ResourceCache<Mr>& get_mr_cache();
         ResourceCache<Qp>& get_qp_cache();

@@ -20,41 +20,81 @@
 // Essential Env. Vars.
 namespace hartebeest {
     struct ConfVar system_vars[MAX_ENVVARS] = {
-        {"HARTEBEEST_NPARTICIPANTS", 0},
-        {"HARTEBEEST_NID", 0},              // Node ID
-        {"HARTEBEEST_EXC_IP_PORT", 0}
+        {"HARTEBEEST_PARTICIPANTS",     0},
+        {"HARTEBEEST_NID",              0}, // Node ID
+        {"HARTEBEEST_EXC_IP_PORT",      0},
+        {"HARTEBEEST_CONF_PATH",        0}
     };
 
     const char* pdef_cq_attr_key = "cq_attr";
     struct ConfPair pdef_cq_attr[] = {
-        {"cq_depth", 128}
+        {"cq_depth",                    128},
     };
-    
+
     const char* pdef_qp_init_attr_key = "qp_init_attr";
     struct ConfPair pdef_qp_init_attr[] = {
-        {"qp_type", IBV_QPT_RC},
-        {"cap.max_send_wr", 128},
-        {"cap.max_recv_wr", 128},
-        {"cap.max_send_sge", 16},
-        {"cap.max_recv_sge", 16},
-        {"cap.max_inline_data", 256}
+        {"rc:cap.max_send_wr",          128},
+        {"rc:cap.max_recv_wr",          128},
+        {"rc:cap.max_send_sge",         16},
+        {"rc:cap.max_recv_sge",         16},
+        {"rc:cap.max_inline_data",      256},
+
+        {"uc:cap.max_send_wr",          128},
+        {"uc:cap.max_recv_wr",          128},
+        {"uc:cap.max_send_sge",         16},
+        {"uc:cap.max_recv_sge",         16},
+        {"uc:cap.max_inline_data",      256},
+
+        {"ud:cap.max_send_wr",          128},
+        {"ud:cap.max_recv_wr",          128},
+        {"ud:cap.max_send_sge",         16},
+        {"ud:cap.max_recv_sge",         16},
+        {"ud:cap.max_inline_data",      256},
     };
     
     const char* pdef_qp_attr_key = "qp_attr";
     struct ConfPair pdef_qp_attr[] = {
-        {"path_mtu", IBV_MTU_4096},
-        {"rq_psn", 3185},
-        {"sq_psn", 3185},
-        {"ah_attr.is_global", 0},
-        {"ah_attr.sl", 0},
-        {"ah_attr.src_path_bits", 0},
-        {"max_dest_rd_atomic", 16},
-        {"min_rnr_timer", 12},
-        {"timeout", 14},
-        {"retry_cnt", 7},
-        {"rnr_retry", 7},
-        {"max_rd_atomic", 1},
-        {"max_dest_rd_atomic", 16}
+        {"rc:path_mtu",                 IBV_MTU_4096},
+        {"rc:rq_psn",                   3185},
+        {"rc:sq_psn",                   3185},
+        {"rc:ah_attr.is_global",        0},
+        {"rc:ah_attr.sl",               0},
+        {"rc:ah_attr.src_path_bits",    0},
+        {"rc:max_dest_rd_atomic",       16},
+        {"rc:min_rnr_timer",            12},
+        {"rc:timeout",                  14},
+        {"rc:retry_cnt",                7},
+        {"rc:rnr_retry",                7},
+        {"rc:max_rd_atomic",            1},
+        {"rc:max_dest_rd_atomic",       16},
+
+        {"uc:path_mtu",                 IBV_MTU_4096},
+        {"uc:rq_psn",                   3185},
+        {"uc:sq_psn",                   3185},
+        {"uc:ah_attr.is_global",        0},
+        {"uc:ah_attr.sl",               0},
+        {"uc:ah_attr.src_path_bits",    0},
+        {"uc:max_dest_rd_atomic",       16},
+        {"uc:min_rnr_timer",            12},
+        {"uc:timeout",                  14},
+        {"uc:retry_cnt",                7},
+        {"uc:rnr_retry",                7},
+        {"uc:max_rd_atomic",            1},
+        {"uc:max_dest_rd_atomic",       16},
+
+        {"ud:path_mtu",                 IBV_MTU_4096},
+        {"ud:rq_psn",                   3185},
+        {"ud:sq_psn",                   3185},
+        {"ud:ah_attr.is_global",        0},
+        {"ud:ah_attr.sl",               0},
+        {"ud:ah_attr.src_path_bits",    0},
+        {"ud:max_dest_rd_atomic",       16},
+        {"ud:min_rnr_timer",            12},
+        {"ud:timeout",                  14},
+        {"ud:retry_cnt",                7},
+        {"ud:rnr_retry",                7},
+        {"ud:max_rd_atomic",            1},
+        {"ud:max_dest_rd_atomic",       16},
     };
 
     struct ConfDict pdef_cfs[] = {
@@ -96,9 +136,17 @@ hb_retcode hartebeest::ConfigLoader::init_sysvars() {
 
 hb_retcode hartebeest::ConfigLoader::init_params() {
 
+    if (system_vars[SYSVAR_CONF_PATH].val != nullptr) {
+        fname = std::string(
+            system_vars[SYSVAR_CONF_PATH].val
+        );
+    }
+    
     HB_CLOGGER->info("Initializing paramters...");
     nlohmann::json cfgs;
     std::ifstream conf_file(fname);
+
+    
 
     // Open file.
     if (conf_file.fail())
@@ -114,11 +162,7 @@ hb_retcode hartebeest::ConfigLoader::init_params() {
             attr = &pdef_cfs[i];
 
             if (!cfgs.contains(attr->key)) {
-                HB_CLOGGER->warn("Attribute not found: {}", attr->key);
-                return hb_retcode(CFGLDR_KEY_NOT_FOUND);
-            }
-            else {
-                HB_CLOGGER->info("Attribute found: {} from {}", attr->key, fname);
+                continue;
             }
 
             nlohmann::json& sub_cfgs = cfgs[attr->key];
@@ -127,7 +171,7 @@ hb_retcode hartebeest::ConfigLoader::init_params() {
                 const char* key = attr->conf[j].key;
                 if (sub_cfgs.contains(key)) {
                     attr->conf[j].val = sub_cfgs[key];
-                    HB_CLOGGER->info("Substitute {}, [{}: {}]", attr->key, key, attr->conf[i].val);
+                    HB_CLOGGER->info("Substitute {}, [{}, {}]", attr->key, key, attr->conf[i].val);
                 }
 
                 assert(is_attr_cached(attr->key) == false);

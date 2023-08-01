@@ -53,7 +53,7 @@ int main() {
     HARTEBEEST_CORE_HDL.create_basiccq("newcons-basiccq-2");
 
     HARTEBEEST_CORE_HDL.create_local_qp(
-        global_pd_name.c_str(), global_qp_name.c_str(), "newcons-basiccq-1", "newcons-basiccq-2"
+        global_pd_name.c_str(), global_qp_name.c_str(), IBV_QPT_RC, "newcons-basiccq-1", "newcons-basiccq-2"
     );
 
     HARTEBEEST_CORE_HDL.init_local_qp(

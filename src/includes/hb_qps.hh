@@ -26,21 +26,20 @@ namespace hartebeest {
     class Qp {
     private:
         std::string name;
-        enum QpType type = QP_TYPE_UNKNOWN;
+        enum QpType pos_type = QP_TYPE_UNKNOWN;
+        enum ibv_qp_type conn_type;
 
         struct ibv_qp* qp = nullptr;
         uint8_t pid;
         uint16_t plid;
         
     public:
-        Qp(const char*, Pd*, struct ibv_cq*, struct ibv_cq*);
+        Qp(const char*, enum ibv_qp_type, Pd*, struct ibv_cq*, struct ibv_cq*);
         ~Qp();
 
         void set_type(enum QpType);
 
         bool is_qp_created() const;
-        bool is_involved() const;
-
         int query_state();
 
         // State transition interfaces

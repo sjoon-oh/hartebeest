@@ -55,7 +55,7 @@ namespace hartebeest {
 
         bool create_basiccq(const char*);
 
-        bool create_local_qp(const char*, const char*, const char*, const char*);
+        bool create_local_qp(const char*, const char*, enum ibv_qp_type, const char*, const char*);
         bool init_local_qp(const char*, const char*);
         bool connect_local_qp(const char*, const char*, const char*);
         bool memc_push_local_qp(const char*, const char*, const char*);

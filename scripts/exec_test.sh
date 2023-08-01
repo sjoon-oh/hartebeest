@@ -19,9 +19,10 @@ if [[ ${workspace_home} != ${project_home} ]]; then
     exit
 fi
 
-export HARTEBEEST_NPARTICIPANTS=2
+export HARTEBEEST_PARTICIPANTS=0,1
 export HARTEBEEST_NID=0
-export HARTEBEEST_EXC_IP_PORT=111.222.333.444:9999
+export HARTEBEEST_EXC_IP_PORT=123.123.123.123:9999
+export HARTEBEEST_CONF_PATH=./hb_config.json
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/lib
 

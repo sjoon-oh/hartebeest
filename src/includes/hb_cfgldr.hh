@@ -12,7 +12,7 @@
 #include "./hb_retcode.hh"
 
 namespace hartebeest {
-#define MAX_ENVVARS     3
+#define MAX_ENVVARS     4
 
     struct ConfVar {
         const char* varname;
@@ -34,6 +34,13 @@ namespace hartebeest {
         PDEF_CQ_ATTR        = 0 ,
         PDEF_QP_INIT_ATTR       ,
         PDEF_QP_ATTR
+    };
+
+    enum {
+        SYSVAR_PARTICIPANTS,
+        SYSVAR_NID,
+        SYSVAR_EXEC_IP_PORT,
+        SYSVAR_CONF_PATH
     };
 
     class ConfigLoader {
