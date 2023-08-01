@@ -15,10 +15,6 @@ if [[ ${workspace_home} != ${project_home} ]]; then
     exit
 fi
 
-export HARTEBEEST_NPARTICIPANTS=2
-export HARTEBEEST_NID=0
-export HARTEBEEST_EXC_IP_PORT=143.248.231.40:9999
-
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/build/lib
 gcc -o build/bin/core-test-c test/core-test-c.c -libverbs -lmemcached -L ./build/lib/ -lhartebeest
 
