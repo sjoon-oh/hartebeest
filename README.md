@@ -44,7 +44,7 @@ export HARTEBEEST_EXC_IP_PORT=111.222.333.444:9999
 - `HARTEBEEST_NPARTICIPANTS`: Set the machine identifiers of machines in a cluster.
 - `HARTEBEEST_NID`: Set the number of a machine identifier. Starting the number of `0` is recommended.
 - `HARTEBEEST_EXC_IP_PORT`: Set the number of the Memcached server to communicate.
-
+- `HARTEBEEST_CONF_PATH`: Set the configuration file path.
 
 ### Dependencies
 
