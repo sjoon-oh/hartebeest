@@ -41,6 +41,31 @@ bool hartebeest::HartebeestCore::memc_push_general(const char* msg_key) {
     return false;
 }
 
+bool hartebeest::HartebeestCore::memc_wait_general(const char* msg_key) {
+
+    int retry_cnt = 0;
+
+    std::string fetched;
+    HB_CLOGGER->info("Message wait: {}", msg_key);
+
+    while (HARTEBEEST_MEMC_HDL.get(msg_key, fetched).ret_code != MEMCH_GET_OK) {
+        
+        retry_cnt += 1;
+        if (retry_cnt == 10000)
+            break;
+
+        sleep(0.5);
+    }
+
+    if (retry_cnt == 10000) {
+        HB_CLOGGER->warn("Message fetch timeout: {}", msg_key);
+        return false;
+    }
+    
+    HB_CLOGGER->info("Message detected: {}", msg_key);
+    return true;
+}
+
 bool hartebeest::HartebeestCore::memc_del_general(const char* msg_key) {
     hb_retcode hb_rc;
     hb_rc = HARTEBEEST_MEMC_HDL.del(msg_key);
@@ -219,9 +244,9 @@ bool hartebeest::HartebeestCore::memc_fetch_remote_qp(const char* remote_qp_key)
     return true;
 }
 
-bool hartebeest::HartebeestCore::rdma_post_fast(
+bool hartebeest::HartebeestCore::rdma_post_single_fast(
         struct ibv_qp* local_qp, void* local_addr, void* remote_addr, size_t len, 
-        enum ibv_wr_opcode opcode, uint32_t lkey, uint32_t rkey
+        enum ibv_wr_opcode opcode, uint32_t lkey, uint32_t rkey, uint64_t work_id
     ) {
         struct ibv_send_wr work_req;
         struct ibv_sge sg_elem;
@@ -234,7 +259,7 @@ bool hartebeest::HartebeestCore::rdma_post_fast(
         sg_elem.length = len;
         sg_elem.lkey = lkey;
 
-        work_req.wr_id = 0;
+        work_req.wr_id = work_id;
         work_req.num_sge = 1;
         work_req.opcode = opcode;
         work_req.send_flags = IBV_SEND_SIGNALED;
@@ -284,8 +309,6 @@ hartebeest::Mr* hartebeest::HartebeestCore::get_local_mr(const char* pd_key, con
     return HB_PD_CACHE.get_resrc(pd_key)->get_mr_cache().get_resrc(mr_key);
 }
 
-
-
 hartebeest::Qp* hartebeest::HartebeestCore::get_local_qp(const char* pd_key, const char* qp_key) {
     return HB_PD_CACHE.get_resrc(pd_key)->get_qp_cache().get_resrc(qp_key);
 }
@@ -306,13 +329,6 @@ char* hartebeest::HartebeestCore::get_sysvar(const char* envvar) {
 int hartebeest::HartebeestCore::get_nid() {
     return nid;
 }
-
-
-
-
-
-
-
 
 // Debugs
 void hartebeest::HartebeestCore::pd_status() {

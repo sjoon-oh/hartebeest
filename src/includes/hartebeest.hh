@@ -23,12 +23,6 @@
 
 namespace hartebeest {
 
-    struct RequestMr {
-        const char* mr_key;
-        uint64_t offset;
-        size_t len;
-    };
-
     // Funcs
     class HartebeestCore {
     private:
@@ -46,13 +40,13 @@ namespace hartebeest {
         bool validation_test();
         
         bool memc_push_general(const char*);
+        bool memc_wait_general(const char*);
         bool memc_del_general(const char*);
 
 
         void init();
 
         bool create_local_pd(const char*);
-        void destroy_pd();
 
         // MR interfaces
         bool create_local_mr(const char*, const char*, size_t, int);
@@ -60,7 +54,6 @@ namespace hartebeest {
         bool memc_fetch_remote_mr(const char*);
 
         bool create_basiccq(const char*);
-        void destroy_basiccq();
 
         bool create_local_qp(const char*, const char*, const char*, const char*);
         bool init_local_qp(const char*, const char*);
@@ -68,8 +61,8 @@ namespace hartebeest {
         bool memc_push_local_qp(const char*, const char*, const char*);
         bool memc_fetch_remote_qp(const char*);
 
-        bool rdma_post_template(const char*, const char*, struct RequestMr, struct RequestMr, enum ibv_wr_opcode);
-        bool rdma_post_fast(struct ibv_qp*, void*, void*, size_t, enum ibv_wr_opcode, uint32_t, uint32_t);
+        bool rdma_post_single_fast(struct ibv_qp*, void*, void*, size_t, 
+            enum ibv_wr_opcode, uint32_t, uint32_t, uint64_t);
 
         bool rdma_poll(const char*);
         
@@ -81,7 +74,7 @@ namespace hartebeest {
         // Access 
         Pd* get_local_pd(const char*);
         Mr* get_local_mr(const char*, const char*);
-        BasicCq* get_local_basiccq(const char*);
+        // BasicCq* get_local_basiccq(const char*);
         Qp* get_local_qp(const char*, const char*);
 
         Mr* get_remote_mr(const char*);

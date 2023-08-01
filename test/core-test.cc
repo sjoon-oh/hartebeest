@@ -41,19 +41,6 @@ int main() {
         0 | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
     );
 
-    // Create QP
-    // HARTEBEEST_CORE_HDL.create_cq();
-    // {
-    //     HARTEBEEST_CORE_HDL.pd_status();
-    //     HARTEBEEST_CORE_HDL.mr_status("newcons-pd-1");
-
-    //     HARTEBEEST_CORE_HDL.cq_status();
-    //     HARTEBEEST_CORE_HDL.qp_status("newcons-pd-1");
-    // }
-
-    // hartebeest::Mr* local_mr_1 = nullptr;
-    // local_mr_1 = HARTEBEEST_CORE_HDL.get_local_mr("newcons-pd-1", "newcons-mr-1");
-
     HARTEBEEST_CORE_HDL.memc_push_local_mr(
         global_mr_name.c_str(), global_pd_name.c_str(), global_mr_name.c_str()
     );
@@ -69,9 +56,6 @@ int main() {
         global_pd_name.c_str(), global_qp_name.c_str(), "newcons-basiccq-1", "newcons-basiccq-2"
     );
 
-    // HARTEBEEST_CORE_HDL.get_local_qp(
-    //     global_pd_name.c_str(), 
-    //     global_qp_name.c_str())->transit_init();
     HARTEBEEST_CORE_HDL.init_local_qp(
         global_pd_name.c_str(),
         global_qp_name.c_str()
@@ -88,9 +72,6 @@ int main() {
         other_qp_name.c_str()
     );
 
-
-
-
     if (node_id == 0) {
 
         // auto local_mr = HARTEBEEST_CORE_HDL.get_local_mr(
@@ -104,21 +85,19 @@ int main() {
         auto local_qp = HARTEBEEST_CORE_HDL.get_local_qp(
                 global_pd_name.c_str(),
                 global_qp_name.c_str()
-        )->get_qp();
+            )->get_qp();
+
         auto local_mr = HARTEBEEST_CORE_HDL.get_local_mr(
                 global_pd_name.c_str(),
                 global_mr_name.c_str()
             )->get_mr();
+
         auto remote_mr = HARTEBEEST_CORE_HDL.get_remote_mr(
-            other_mr_name.c_str()
-        )->get_mr();
-
-        printf("Remote addr: %p\n", remote_mr->addr);
-
-        sleep(3);
+                other_mr_name.c_str()
+            )->get_mr();
 
         char* target = reinterpret_cast<char*>(local_mr->addr);
-        char* source_str = "asdfasdfasdfafdsfadsafdsafdsfadsa";
+        char* source_str = "PAYLOAD STRING";
         std::memcpy(
             target,
             source_str,
@@ -127,43 +106,34 @@ int main() {
         // *target = 98;
         size_t buflen = std::strlen(source_str);
 
-        HARTEBEEST_CORE_HDL.rdma_post_fast(
-            local_qp, local_mr->addr, remote_mr->addr, buflen, IBV_WR_RDMA_WRITE, local_mr->lkey, remote_mr->rkey
+        HARTEBEEST_CORE_HDL.rdma_post_single_fast(
+            local_qp, local_mr->addr, remote_mr->addr, buflen, 
+            IBV_WR_RDMA_WRITE, local_mr->lkey, remote_mr->rkey, 0
         );
 
         HARTEBEEST_CORE_HDL.rdma_poll(
             "newcons-basiccq-1"
         );
 
-
+        HARTEBEEST_CORE_HDL.memc_wait_general("general-memc-got");
+        HARTEBEEST_CORE_HDL.memc_del_general("general-memc-got");
     }
     else {
         char* written = reinterpret_cast<char*>(HARTEBEEST_CORE_HDL.get_local_mr(global_pd_name.c_str(), global_mr_name.c_str())->get_buffer());
 
-        printf("Addr: %p\n", written);
-        while (1) {
-            printf("%s", written);
-
+        HB_CLOGGER->info("To be written address: 0x{:x}", reinterpret_cast<uintptr_t>(written));
+        while (std::strcmp(written, "PAYLOAD STRING") != 0) {
+            
         }
+        HB_CLOGGER->info("Catched: {}", written);
+        HARTEBEEST_CORE_HDL.memc_push_general("general-memc-got");
     }
 
-    // HARTEBEEST_CORE_HDL.memc_fetch_remote_mr("qp1-node0");
+    
 
     HB_CLOGGER->info("Test end.");
 
-    // result = "";
-    // HARTEBEEST_MEMC_HDL.prefix_get(
-    //     "qp1-node0", hartebeest::HB_MEMC_KEY_PREF_QPINFO,
-    //     result);
-    // HB_CLOGGER->info("Fetched flatten QP: {}", result);
 
-
-
-
-
-    // HARTEBEEST_CORE_HDL.
-
-    // Assuming to be remote
 
     return 0;
 }
