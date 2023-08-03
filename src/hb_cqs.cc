@@ -17,8 +17,6 @@
 hartebeest::BasicCq::BasicCq(const char* name, hartebeest::Hca& hca_dev) {
     hca_ln = &hca_dev;
 
-    HB_CLOGGER->info("Ctor, CQ: {}", name);
-
     struct ibv_context* hca_ctx = hca_dev.get_device_ctx();
     // int* cq_depth = ConfigLoader::get_instance().get_attr("cq_depth");
     

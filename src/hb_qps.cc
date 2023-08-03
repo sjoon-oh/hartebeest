@@ -264,7 +264,5 @@ void hartebeest::Qp::unflatten_info(const char* fetch) {
     // Assuming port number do not overflow.
     pid = large_pid;
     conn_type = static_cast<enum ibv_qp_type>(large_conn_type);
-
-    HB_CLOGGER->info("Unflatten QP: {}", fetch);
 }
 

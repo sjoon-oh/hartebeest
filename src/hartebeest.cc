@@ -83,13 +83,11 @@ void hartebeest::HartebeestCore::init() {
 }
 
 bool hartebeest::HartebeestCore::create_local_pd(const char* pd_key) {
-
-    HB_CLOGGER->info("Creating protection domain: {}", pd_key);
     hartebeest::Pd* new_pd = new hartebeest::Pd(
         pd_key, HB_HCA_INITR.get_hca(hca_idx)
     );
     hb_retcode hb_rc = HB_PD_CACHE.register_resrc(pd_key, new_pd);
-    HB_CLOGGER->info("{}", hb_rc.aux_str);
+    HB_CLOGGER->info("New protection domain {}: {}", pd_key, hb_rc.aux_str);
 
     if (hb_rc.ret_code == CACHE_RETCODE_REGISTER_OK)
         return true;
@@ -98,13 +96,11 @@ bool hartebeest::HartebeestCore::create_local_pd(const char* pd_key) {
 }
 
 bool hartebeest::HartebeestCore::create_local_mr(const char* pd_key, const char* mr_key, size_t buflen, int rights) {
-
-    HB_CLOGGER->info("Creating memory region: {}, to {}", mr_key, pd_key);
     hartebeest::Pd* registered_pd = HB_PD_CACHE.get_resrc(pd_key);
     assert(registered_pd != nullptr);
 
     hb_retcode hb_rc = registered_pd->create_mr(mr_key, buflen, rights);
-    HB_CLOGGER->info("{}", hb_rc.aux_str);
+    HB_CLOGGER->info("New memory region {}, to {}: {}", mr_key, pd_key, hb_rc.aux_str);
 
     if (hb_rc.ret_code == PD_RETCODE_CREATE_MR_OK)
         return true;
@@ -142,8 +138,6 @@ bool hartebeest::HartebeestCore::memc_fetch_remote_mr(const char* remote_mr_key)
 }
 
 bool hartebeest::HartebeestCore::create_basiccq(const char* cq_key) {
-
-    HB_CLOGGER->info("Creating basic completion queue: {}", cq_key);
     hartebeest::BasicCq* new_basiccq = new hartebeest::BasicCq(
         cq_key, 
         HB_HCA_INITR.get_hca(hca_idx));
@@ -152,6 +146,7 @@ bool hartebeest::HartebeestCore::create_basiccq(const char* cq_key) {
 
     hb_retcode hb_rc;
     hb_rc = HB_BASICCQ_CACHE.register_resrc(cq_key, new_basiccq);
+    HB_CLOGGER->info("New basic completion queue {}: {}", cq_key, hb_rc.aux_str);
 
     if (hb_rc.ret_code == CACHE_RETCODE_REGISTER_OK)
         return true;
@@ -161,8 +156,6 @@ bool hartebeest::HartebeestCore::create_basiccq(const char* cq_key) {
 
 
 bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char* qp_key, enum ibv_qp_type conn_type, const char* sendcq_key, const char* recvcq_key) {
-
-    HB_CLOGGER->info("Creating Queue Pair {}, to {}", qp_key, pd_key);
     hartebeest::Pd* registered_pd = HB_PD_CACHE.get_resrc(pd_key);
 
     assert(registered_pd != nullptr);
@@ -171,9 +164,7 @@ bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char*
     struct ibv_cq* recv_cq = HB_BASICCQ_CACHE.get_resrc(recvcq_key)->get_cq();
 
     assert((send_cq != nullptr) && (recv_cq != nullptr));
-
-    hb_retcode hb_rc = registered_pd->create_qp(qp_key, conn_type, send_cq, recv_cq);
-    HB_CLOGGER->info("{}", hb_rc.aux_str);
+    HB_CLOGGER->info("New queue pair {}: {}", qp_key, hb_rc.aux_str);
 
     if (hb_rc.ret_code == hartebeest::PD_RETCODE_CREATE_QP_OK)
         return true;
