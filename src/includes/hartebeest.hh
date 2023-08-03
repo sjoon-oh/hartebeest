@@ -65,6 +65,8 @@ namespace hartebeest {
             enum ibv_wr_opcode, uint32_t, uint32_t, uint64_t);
 
         bool rdma_poll(const char*);
+        bool rdma_send_poll(struct ibv_qp*);
+        bool rdma_recv_poll(struct ibv_qp*);
         
         // bool is_pd_exist(const char*);
         // bool is_mr_exist(const char*, const char*, const char*);

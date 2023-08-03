@@ -41,6 +41,8 @@ bool hartebeest_rdma_post_single_fast(struct ibv_qp*, void*, void*, size_t,
     enum ibv_wr_opcode, uint32_t, uint32_t, uint64_t);
 
 bool hartebeest_rdma_poll(const char*);
+bool hartebeest_rdma_send_poll(struct ibv_qp*);
+bool hartebeest_rdma_recv_poll(struct ibv_qp*);
 
 struct ibv_pd* hartebeest_get_local_pd(const char*);
 struct ibv_mr* hartebeest_get_local_mr(const char*, const char*);

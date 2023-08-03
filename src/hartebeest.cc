@@ -293,6 +293,41 @@ bool hartebeest::HartebeestCore::rdma_poll(const char* cq_key) {
     return true;
 }
 
+bool hartebeest::HartebeestCore::rdma_send_poll(struct ibv_qp* qp) {
+    struct ibv_wc wc;
+    struct ibv_cq* cq = qp->send_cq;
+
+    int nwc;
+    do {
+        nwc = ibv_poll_cq(cq, 1, &wc);
+    } while (nwc == 0);
+
+    if (wc.status != IBV_WC_SUCCESS) {
+        HB_CLOGGER->warn("Expected IBV_WC_SUCCESS, but returned: {}", wc.status);
+        return false;
+    }
+
+    return true;
+}
+
+bool hartebeest::HartebeestCore::rdma_recv_poll(struct ibv_qp* qp) {
+    struct ibv_wc wc;
+    struct ibv_cq* cq = qp->recv_cq;
+
+    int nwc;
+    do {
+        nwc = ibv_poll_cq(cq, 1, &wc);
+    } while (nwc == 0);
+
+    if (wc.status != IBV_WC_SUCCESS) {
+        HB_CLOGGER->warn("Expected IBV_WC_SUCCESS, but returned: {}", wc.status);
+        return false;
+    }
+
+    return true;
+}
+
+
 hartebeest::Pd* hartebeest::HartebeestCore::get_local_pd(const char* pd_key) {
     return HB_PD_CACHE.get_resrc(pd_key);
 }

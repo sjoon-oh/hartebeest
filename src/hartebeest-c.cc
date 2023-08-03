@@ -81,6 +81,14 @@ bool hartebeest_rdma_poll(const char* cq_key) {
     return HARTEBEEST_CORE_HDL.rdma_poll(cq_key);
 }
 
+bool hartebeest_rdma_send_poll(const ibv_qp* qp) {
+    return HARTEBEEST_CORE_HDL.rdma_send_poll(qp);
+}
+
+bool hartebeest_rdma_recv_poll(const ibv_qp* qp) {
+    return HARTEBEEST_CORE_HDL.rdma_recv_poll(qp);
+}
+
 struct ibv_pd* hartebeest_get_local_pd(const char* pd_key) {
     return HARTEBEEST_CORE_HDL.get_local_pd(pd_key)->get_pd();
 }
