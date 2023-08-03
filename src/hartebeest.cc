@@ -164,7 +164,6 @@ bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char*
     struct ibv_cq* recv_cq = HB_BASICCQ_CACHE.get_resrc(recvcq_key)->get_cq();
 
     assert((send_cq != nullptr) && (recv_cq != nullptr));
-    HB_CLOGGER->info("New queue pair {}: {}", qp_key, hb_rc.aux_str);
 
     if (hb_rc.ret_code == hartebeest::PD_RETCODE_CREATE_QP_OK)
         return true;
