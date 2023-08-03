@@ -165,6 +165,7 @@ bool hartebeest::HartebeestCore::create_local_qp(const char* pd_key, const char*
 
     assert((send_cq != nullptr) && (recv_cq != nullptr));
 
+    hb_retcode hb_rc = registered_pd->create_qp(qp_key, conn_type, send_cq, recv_cq);
     if (hb_rc.ret_code == hartebeest::PD_RETCODE_CREATE_QP_OK)
         return true;
 
