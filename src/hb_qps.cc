@@ -74,7 +74,14 @@ hartebeest::Qp::Qp(const char* id, enum ibv_qp_type connect_type, hartebeest::Pd
         qp = ibv_create_qp(inv_pd->get_pd(), &init_qp_attr);
         uintptr_t qp_addr = reinterpret_cast<uintptr_t>(qp);
 
-        HB_CLOGGER->info("New QP({}, 0x{:x}), at {} state", name, qp_addr, query_state());
+        assert(qp != nullptr);
+
+        HB_CLOGGER->info("New QP({}, 0x{:x}), at {} state\n\tDetail - {}, {}, {}, {}, {}", 
+            name, qp_addr, query_state(),
+            init_qp_attr.cap.max_send_wr, init_qp_attr.cap.max_recv_wr,
+            init_qp_attr.cap.max_send_sge, init_qp_attr.cap.max_recv_sge,
+            init_qp_attr.cap.max_inline_data
+            );
 
         assert(qp != nullptr);
     }

@@ -77,6 +77,12 @@ bool hartebeest_rdma_post_single_fast(
     return HARTEBEEST_CORE_HDL.rdma_post_single_fast(local_qp, local_addr, remote_addr, len, opcode, lkey, rkey, work_id);
 }
 
+bool hartebeest_rdma_post_single_signaled_inline(
+        struct ibv_qp* local_qp, void* local_addr, void* remote_addr, size_t len, 
+        enum ibv_wr_opcode opcode, uint32_t lkey, uint32_t rkey, uint64_t work_id) {
+    return HARTEBEEST_CORE_HDL.rdma_post_single_signaled_inline(local_qp, local_addr, remote_addr, len, opcode, lkey, rkey, work_id);
+}
+
 bool hartebeest_rdma_poll(const char* cq_key) {
     return HARTEBEEST_CORE_HDL.rdma_poll(cq_key);
 }

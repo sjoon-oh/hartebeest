@@ -63,6 +63,8 @@ namespace hartebeest {
 
         bool rdma_post_single_fast(struct ibv_qp*, void*, void*, size_t, 
             enum ibv_wr_opcode, uint32_t, uint32_t, uint64_t);
+        bool rdma_post_single_signaled_inline(struct ibv_qp*, void*, void*, size_t, 
+            enum ibv_wr_opcode, uint32_t, uint32_t, uint64_t);
 
         bool rdma_poll(const char*);
         bool rdma_send_poll(struct ibv_qp*);

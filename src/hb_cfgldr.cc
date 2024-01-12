@@ -162,6 +162,7 @@ hb_retcode hartebeest::ConfigLoader::init_params() {
             attr = &pdef_cfs[i];
 
             if (!cfgs.contains(attr->key)) {
+                HB_CLOGGER->info("Skipping paramter: {}", attr->key);
                 continue;
             }
 
@@ -171,7 +172,7 @@ hb_retcode hartebeest::ConfigLoader::init_params() {
                 const char* key = attr->conf[j].key;
                 if (sub_cfgs.contains(key)) {
                     attr->conf[j].val = sub_cfgs[key];
-                    HB_CLOGGER->info("Substitute {}, [{}, {}]", attr->key, key, attr->conf[i].val);
+                    HB_CLOGGER->info("Substitute: {}, [{}, {}]", attr->key, key, attr->conf[j].val);
                 }
 
                 assert(is_attr_cached(attr->key) == false);

@@ -276,6 +276,46 @@ bool hartebeest::HartebeestCore::rdma_post_single_fast(
         return true;
 }
 
+bool hartebeest::HartebeestCore::rdma_post_single_signaled_inline(
+        struct ibv_qp* local_qp, void* local_addr, void* remote_addr, size_t len, 
+        enum ibv_wr_opcode opcode, uint32_t lkey, uint32_t rkey, uint64_t work_id
+    ) {
+        struct ibv_send_wr work_req;
+        struct ibv_sge sg_elem;
+        struct ibv_send_wr* bad_work_req = nullptr;
+
+        std::memset(&sg_elem, 0, sizeof(sg_elem));
+        std::memset(&work_req, 0, sizeof(work_req)); 
+
+        sg_elem.addr = reinterpret_cast<uintptr_t>(local_addr);
+        sg_elem.length = len;
+        sg_elem.lkey = lkey;
+
+        work_req.wr_id = work_id;
+        work_req.num_sge = 1;
+        work_req.opcode = opcode;
+        work_req.send_flags = IBV_SEND_SIGNALED | IBV_SEND_INLINE;
+        work_req.wr_id = 0;
+        work_req.sg_list = &sg_elem;
+        work_req.next = nullptr;
+
+        work_req.wr.rdma.remote_addr = reinterpret_cast<uintptr_t>(remote_addr);
+        work_req.wr.rdma.rkey = rkey;
+
+        int ret = ibv_post_send(local_qp, &work_req, &bad_work_req);
+
+        if (bad_work_req != nullptr) {
+            HB_CLOGGER->warn("Bad work request");
+            return false;
+        }
+        if (ret != 0) {
+            HB_CLOGGER->warn("RDMA Post unusual return: {}", ret);
+            return false;
+        }
+
+        return true;
+}
+
 bool hartebeest::HartebeestCore::rdma_poll(const char* cq_key) {
     struct ibv_wc wc;
     struct ibv_cq* cq = HB_BASICCQ_CACHE.get_resrc(cq_key)->get_cq();
